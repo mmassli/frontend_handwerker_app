@@ -1,0 +1,110 @@
+name: handwerker_app
+description: On-demand repair marketplace connecting customers with verified craftsmen.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Networking
+  dio: ^5.4.3+1
+  retrofit: '>=4.1.0 <4.9.0'
+  pretty_dio_logger: ^1.3.1
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Storage
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.2.3
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # UI & Animations
+  flutter_animate: ^4.5.0
+  shimmer: ^3.0.0
+  lottie: ^3.1.0
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  flutter_staggered_animations: ^1.1.1
+  animated_text_kit: ^4.2.2
+
+  # Maps & Location
+  google_maps_flutter: ^2.6.1
+  geolocator: ^11.0.0
+  geocoding: ^3.0.0
+
+  # Media
+  image_picker: ^1.0.7
+  video_player: ^2.8.6
+  audioplayers: ^6.0.0
+  file_picker: ^8.0.0+1
+  record: ^5.1.2
+  path_provider: ^2.1.4
+
+  # Chat
+  flutter_chat_ui: ^1.6.12
+  flutter_chat_types: ^3.6.2
+
+  # Payments
+  flutter_stripe: ^10.1.1
+
+  # Push Notifications
+  firebase_core: ^2.30.0
+  firebase_messaging: ^14.8.0
+  flutter_local_notifications: ^17.1.2
+
+  # Phone Auth
+  pin_code_fields: ^8.0.1
+  intl_phone_number_input: ^0.7.4
+
+  # Forms & Validation
+  reactive_forms: ^17.0.1
+
+  # Encryption
+  encrypt: ^5.0.3
+  pointycastle: ^3.7.4
+
+  # Utilities
+  intl: ^0.20.2
+  url_launcher: ^6.2.5
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.0.3
+  uuid: ^4.4.0
+  json_annotation: ^4.9.0
+  freezed_annotation: ^2.4.1
+  equatable: ^2.0.5
+  timeago: ^3.6.1
+  flutter_rating_bar: ^4.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  json_serializable: ^6.8.0
+  freezed: ^2.5.2
+  retrofit_generator: ^9.1.2
+  riverpod_generator: ^2.4.0
+  mockito: ^5.4.4
+
+# Force compatible sub-packages for the `record` plugin
+dependency_overrides:
+  record_linux: ^1.3.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
