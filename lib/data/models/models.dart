@@ -227,6 +227,57 @@ class WalletBalance {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// CREATE CRAFTSMAN REQUEST DTO
+// Matches POST /craftsmen (Admin only)
+// ═══════════════════════════════════════════════════════════════
+
+class CreateCraftsmanRequest {
+  final String phone;
+  final String firstName;
+  final String lastName;
+  final String? email;
+  final List<String>? serviceCategoryIds;
+  final double? radiusKm;
+  final String? street;
+  final String? city;
+  final String? postalCode;
+
+  const CreateCraftsmanRequest({
+    required this.phone,
+    required this.firstName,
+    required this.lastName,
+    this.email,
+    this.serviceCategoryIds,
+    this.radiusKm,
+    this.street,
+    this.city,
+    this.postalCode,
+  });
+
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'phone': phone,
+      'firstName': firstName,
+      'lastName': lastName,
+    };
+    if (email != null && email!.isNotEmpty) map['email'] = email;
+    if (serviceCategoryIds != null && serviceCategoryIds!.isNotEmpty) {
+      map['serviceCategoryIds'] = serviceCategoryIds;
+    }
+    if (radiusKm != null) map['radiusKm'] = radiusKm;
+    if (street != null || city != null || postalCode != null) {
+      map['address'] = {
+        if (street != null) 'street': street,
+        if (city != null) 'city': city,
+        if (postalCode != null) 'postalCode': postalCode,
+        'country': 'DE',
+      };
+    }
+    return map;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // DOCUMENTS
 // ═══════════════════════════════════════════════════════════════
 

@@ -92,6 +92,14 @@ class ApiService {
   Future<Response> getWallet() =>
       _dio.get(ApiConstants.craftsmanWallet);
 
+  /// GET /craftsmen/me/available-orders
+  ///
+  /// Returns open orders (MATCHING / PROPOSALS_RECEIVED) whose service
+  /// category and geographic radius match this craftsman.  Use as a
+  /// pull-based complement to FCM push notifications.
+  Future<Response> getAvailableOrders() =>
+      _dio.get(ApiConstants.craftsmanAvailableOrders);
+
   // ── Service Categories ────────────────────────────────────
   // NOTE: this endpoint requires a valid Bearer token (403 if missing)
   Future<Response> getServiceCategories() =>

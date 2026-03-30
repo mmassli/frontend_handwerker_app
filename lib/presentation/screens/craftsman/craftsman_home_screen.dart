@@ -22,6 +22,7 @@ class _CraftsmanHomeScreenState extends ConsumerState<CraftsmanHomeScreen> {
   Widget build(BuildContext context) {
     final walletAsync = ref.watch(craftsmanWalletProvider);
     final ordersAsync = ref.watch(activeOrdersProvider);
+    final availableAsync = ref.watch(availableOrdersProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.slate900,
@@ -422,6 +423,206 @@ class _CraftsmanHomeScreenState extends ConsumerState<CraftsmanHomeScreen> {
               ),
             ),
             error: (_, __) => const SliverToBoxAdapter(),
+          ),
+
+          // ── Available Orders section header ────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Verfügbare Aufträge',
+                      style: TextStyle(
+                        fontFamily: AppTheme.displayFont,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.slate100,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded,
+                        color: AppTheme.slate400, size: 20),
+                    tooltip: 'Aktualisieren',
+                    onPressed: () =>
+                        ref.invalidate(availableOrdersProvider),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Available Orders list ──────────────────────────────
+          availableAsync.when(
+            data: (available) {
+              if (available.isEmpty) {
+                return const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      'Keine passenden Aufträge in Ihrer Nähe.',
+                      style: TextStyle(
+                        fontFamily: AppTheme.bodyFont,
+                        fontSize: 14,
+                        color: AppTheme.slate500,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      final order = available[i];
+                      return SlideUpFadeIn(
+                        delay: Duration(milliseconds: 100 + i * 60),
+                        child: TapScale(
+                          onTap: () => context.push(
+                              '${AppRoutes.jobRequest}/${order.id}'),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppTheme.slate800,
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusLG),
+                              border: Border.all(
+                                color: AppTheme.amber.withOpacity(0.25),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color:
+                                        AppTheme.amber.withOpacity(0.1),
+                                    borderRadius:
+                                        BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.assignment_outlined,
+                                    color: AppTheme.amber,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        order.serviceCategory
+                                                ?.nameDE ??
+                                            'Auftrag',
+                                        style: const TextStyle(
+                                          fontFamily:
+                                              AppTheme.displayFont,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.slate100,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          if (order.requestType ==
+                                              RequestType.immediate)
+                                            Container(
+                                              margin:
+                                                  const EdgeInsets.only(
+                                                      right: 6),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppTheme.error
+                                                    .withOpacity(0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        4),
+                                              ),
+                                              child: const Text(
+                                                '⚡ SOFORT',
+                                                style: TextStyle(
+                                                  fontFamily:
+                                                      AppTheme.bodyFont,
+                                                  fontSize: 10,
+                                                  fontWeight:
+                                                      FontWeight.w700,
+                                                  color: AppTheme.error,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                            ),
+                                          Text(
+                                            order.location?.city ??
+                                                order.location
+                                                    ?.postalCode ??
+                                                '',
+                                            style: const TextStyle(
+                                              fontFamily: AppTheme.bodyFont,
+                                              fontSize: 12,
+                                              color: AppTheme.slate400,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: AppTheme.slate500,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: available.length,
+                  ),
+                ),
+              );
+            },
+            loading: () => SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: ShimmerBox(
+                      width: double.infinity,
+                      height: 80,
+                      borderRadius: AppTheme.radiusLG,
+                    ),
+                  ),
+                  childCount: 3,
+                ),
+              ),
+            ),
+            error: (e, _) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  'Fehler beim Laden: $e',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.bodyFont,
+                    fontSize: 13,
+                    color: AppTheme.error,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

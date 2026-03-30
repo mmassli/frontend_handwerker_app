@@ -245,6 +245,17 @@ class AdminCraftsmenPanel extends ConsumerStatefulWidget {
 class _AdminCraftsmenPanelState extends ConsumerState<AdminCraftsmenPanel> {
   CraftsmanStatus? _filterStatus;
 
+  void _openCreateSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CreateCraftsmanSheet(
+        onCreated: () => ref.invalidate(adminCraftsmenProvider),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final craftsmenAsync = ref.watch(adminCraftsmenProvider(_filterStatus));
@@ -275,7 +286,7 @@ class _AdminCraftsmenPanelState extends ConsumerState<AdminCraftsmenPanel> {
                       label: 'Neu',
                       icon: Icons.add_rounded,
                       width: 100,
-                      onTap: () {},
+                      onTap: () => _openCreateSheet(context),
                     ),
                   ],
                 ),
@@ -1266,6 +1277,446 @@ class _AdminMenuItem extends StatelessWidget {
                       color: AppTheme.slate600, size: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CREATE CRAFTSMAN SHEET
+// ═══════════════════════════════════════════════════════════════
+
+class _CreateCraftsmanSheet extends ConsumerStatefulWidget {
+  final VoidCallback? onCreated;
+  const _CreateCraftsmanSheet({this.onCreated});
+
+  @override
+  ConsumerState<_CreateCraftsmanSheet> createState() =>
+      _CreateCraftsmanSheetState();
+}
+
+class _CreateCraftsmanSheetState extends ConsumerState<_CreateCraftsmanSheet> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _phoneCtrl = TextEditingController();
+  final _firstNameCtrl = TextEditingController();
+  final _lastNameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _radiusCtrl = TextEditingController();
+  final _streetCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _postalCtrl = TextEditingController();
+
+  final Set<String> _selectedCategoryIds = {};
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    _firstNameCtrl.dispose();
+    _lastNameCtrl.dispose();
+    _emailCtrl.dispose();
+    _radiusCtrl.dispose();
+    _streetCtrl.dispose();
+    _cityCtrl.dispose();
+    _postalCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final request = CreateCraftsmanRequest(
+      phone: _phoneCtrl.text.trim(),
+      firstName: _firstNameCtrl.text.trim(),
+      lastName: _lastNameCtrl.text.trim(),
+      email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      serviceCategoryIds:
+          _selectedCategoryIds.isEmpty ? null : _selectedCategoryIds.toList(),
+      radiusKm: _radiusCtrl.text.trim().isEmpty
+          ? null
+          : double.tryParse(_radiusCtrl.text.trim()),
+      street: _streetCtrl.text.trim().isEmpty ? null : _streetCtrl.text.trim(),
+      city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+      postalCode:
+          _postalCtrl.text.trim().isEmpty ? null : _postalCtrl.text.trim(),
+    );
+
+    await ref.read(createCraftsmanProvider.notifier).submit(request);
+
+    final state = ref.read(createCraftsmanProvider);
+    if (!mounted) return;
+
+    if (state.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fehler: ${state.error}'),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } else {
+      Navigator.of(context).pop();
+      widget.onCreated?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: AppTheme.success, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                  'Handwerker ${state.created?.displayName ?? ''} angelegt'),
+            ],
+          ),
+          backgroundColor: AppTheme.surfaceElevated,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final createState = ref.watch(createCraftsmanProvider);
+    final categoriesAsync = ref.watch(serviceCategoriesProvider);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppTheme.surfaceDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        16,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.slate600,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Title
+              const Text(
+                'Handwerker anlegen',
+                style: TextStyle(
+                  fontFamily: AppTheme.displayFont,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.slate100,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Phone
+              _SheetLabel('Telefonnummer *'),
+              _SheetTextField(
+                controller: _phoneCtrl,
+                hint: '+49 151 00000000',
+                keyboardType: TextInputType.phone,
+                prefixIcon: Icons.phone_rounded,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Pflichtfeld';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // First + Last name row
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SheetLabel('Vorname *'),
+                        _SheetTextField(
+                          controller: _firstNameCtrl,
+                          hint: 'Max',
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Pflichtfeld'
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SheetLabel('Nachname *'),
+                        _SheetTextField(
+                          controller: _lastNameCtrl,
+                          hint: 'Mustermann',
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Pflichtfeld'
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Email
+              _SheetLabel('E-Mail'),
+              _SheetTextField(
+                controller: _emailCtrl,
+                hint: 'max@example.com',
+                keyboardType: TextInputType.emailAddress,
+                prefixIcon: Icons.email_outlined,
+              ),
+              const SizedBox(height: 14),
+
+              // Radius
+              _SheetLabel('Einsatzradius (km)'),
+              _SheetTextField(
+                controller: _radiusCtrl,
+                hint: '25',
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                prefixIcon: Icons.radar_rounded,
+                validator: (v) {
+                  if (v != null && v.trim().isNotEmpty) {
+                    if (double.tryParse(v.trim()) == null) {
+                      return 'Ungültige Zahl';
+                    }
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // Address
+              _SheetLabel('Adresse'),
+              _SheetTextField(
+                controller: _streetCtrl,
+                hint: 'Musterstraße 1',
+                prefixIcon: Icons.home_rounded,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: _SheetTextField(
+                      controller: _cityCtrl,
+                      hint: 'Stadt',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _SheetTextField(
+                      controller: _postalCtrl,
+                      hint: 'PLZ',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Service categories
+              _SheetLabel('Fachbereiche'),
+              categoriesAsync.when(
+                data: (categories) => categories.isEmpty
+                    ? const Text(
+                        'Keine Kategorien verfügbar',
+                        style: TextStyle(
+                            color: AppTheme.slate400, fontSize: 13),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: categories.map((cat) {
+                          final isSelected =
+                              _selectedCategoryIds.contains(cat.id);
+                          return GestureDetector(
+                            onTap: () => setState(() {
+                              if (isSelected) {
+                                _selectedCategoryIds.remove(cat.id);
+                              } else if (cat.id != null) {
+                                _selectedCategoryIds.add(cat.id!);
+                              }
+                            }),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppTheme.amber.withValues(alpha: 0.15)
+                                    : AppTheme.slate800,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppTheme.amber
+                                      : AppTheme.slate700,
+                                ),
+                              ),
+                              child: Text(
+                                cat.nameDE ?? cat.nameEN ?? cat.slug ?? '?',
+                                style: TextStyle(
+                                  fontFamily: AppTheme.bodyFont,
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: isSelected
+                                      ? AppTheme.amber
+                                      : AppTheme.slate300,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                loading: () => const SizedBox(
+                  height: 32,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                        color: AppTheme.amber, strokeWidth: 2),
+                  ),
+                ),
+                error: (_, __) => const Text(
+                  'Kategorien konnten nicht geladen werden',
+                  style:
+                      TextStyle(color: AppTheme.slate400, fontSize: 13),
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              // Submit button
+              HWButton(
+                label: 'Handwerker anlegen',
+                icon: Icons.person_add_rounded,
+                isLoading: createState.isLoading,
+                onTap: createState.isLoading ? null : _submit,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sheet helpers ─────────────────────────────────────────────
+
+class _SheetLabel extends StatelessWidget {
+  final String text;
+  const _SheetLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontFamily: AppTheme.bodyFont,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.slate400,
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType? keyboardType;
+  final IconData? prefixIcon;
+  final String? Function(String?)? validator;
+
+  const _SheetTextField({
+    required this.controller,
+    required this.hint,
+    this.keyboardType,
+    this.prefixIcon,
+    this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      validator: validator,
+      style: const TextStyle(
+        fontFamily: AppTheme.bodyFont,
+        fontSize: 15,
+        color: AppTheme.slate100,
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(
+          fontFamily: AppTheme.bodyFont,
+          fontSize: 15,
+          color: AppTheme.slate500,
+        ),
+        filled: true,
+        fillColor: AppTheme.slate800,
+        prefixIcon: prefixIcon != null
+            ? Icon(prefixIcon, color: AppTheme.slate500, size: 20)
+            : null,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.slate700),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.slate700),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.amber, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppTheme.error, width: 1.5),
+        ),
+        errorStyle: const TextStyle(
+          fontFamily: AppTheme.bodyFont,
+          fontSize: 12,
+          color: AppTheme.error,
         ),
       ),
     );

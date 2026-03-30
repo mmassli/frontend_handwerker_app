@@ -28,6 +28,7 @@ class ApiConstants {
   static const String craftsmanAvailability = '/craftsmen/me/availability';
   static const String craftsmanLocation = '/craftsmen/me/location';
   static const String craftsmanWallet = '/craftsmen/me/wallet';
+  static const String craftsmanAvailableOrders = '/craftsmen/me/available-orders';
 
   // ── Documents ─────────────────────────────────────────────
   static String craftsmanDocuments(String id) => '/craftsmen/$id/documents';

@@ -1,0 +1,2458 @@
+openapi: 3.0.3
+info:
+  title: Handwerker Marketplace API
+  description: |
+    Production-ready REST API for an on-demand repair marketplace connecting customers (Kunden)
+    with verified craftsmen (Handwerker). Supports emergency and scheduled repair services.
+  version: 1.0.0
+  contact:
+    name: Handwerker Platform Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local Development
+  - url: https://api.handwerker.app/v1
+    description: Production
+
+tags:
+  - name: Auth
+    description: Authentication & session management (OTP-based)
+  - name: Customers
+    description: Customer profile management
+  - name: Craftsmen
+    description: Craftsman profile, availability, location & wallet
+  - name: CraftsmanDocuments
+    description: Document upload & verification for craftsmen
+  - name: ServiceCategories
+    description: Service category catalogue
+  - name: Orders
+    description: Full order lifecycle management
+  - name: Proposals
+    description: Price proposal flow between craftsmen and customers
+  - name: Payments
+    description: Payment processing & payout management
+  - name: Ratings
+    description: Rating & review system
+  - name: Disputes
+    description: Dispute handling & resolution
+  - name: Chat
+    description: In-app messaging per order
+  - name: Notifications
+    description: Notification retrieval & management
+  - name: Admin
+    description: Admin-only operations
+
+# ─────────────────────────────────────────────────────────────
+# SECURITY
+# ─────────────────────────────────────────────────────────────
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  # ───────────────────────────────────────────────────────────
+  # SCHEMAS
+  # ───────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Pagination ──────────────────────────────────────────
+    PageMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        totalElements:
+          type: integer
+          example: 142
+        totalPages:
+          type: integer
+          example: 8
+
+    # ── Auth ────────────────────────────────────────────────
+    SendOtpRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone:
+          type: string
+          pattern: '^\+[1-9]\d{6,14}$'
+          example: "+4915112345678"
+
+    SendOtpResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "OTP sent successfully"
+        expiresInSeconds:
+          type: integer
+          example: 300
+        retriesRemaining:
+          type: integer
+          example: 3
+
+    VerifyOtpRequest:
+      type: object
+      required: [phone, code]
+      properties:
+        phone:
+          type: string
+          example: "+4915112345678"
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          example: "123456"
+
+    AuthTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          description: Access token lifetime in seconds
+          example: 900
+        isNewUser:
+          type: boolean
+        requiresConsent:
+          type: boolean
+
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    ConsentRequest:
+      type: object
+      required: [termsAccepted, privacyAccepted, dataProcessingAccepted]
+      properties:
+        termsAccepted:
+          type: boolean
+        privacyAccepted:
+          type: boolean
+        dataProcessingAccepted:
+          type: boolean
+
+    # ── Customer ─────────────────────────────────────────────
+    CustomerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        phone:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        address:
+          $ref: '#/components/schemas/Address'
+        profileComplete:
+          type: boolean
+        gdprConsentAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateCustomerProfileRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          maxLength: 100
+        lastName:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        address:
+          $ref: '#/components/schemas/AddressInput'
+
+    # ── Craftsman ────────────────────────────────────────────
+    CraftsmanStatus:
+      type: string
+      enum: [PENDING, VERIFIED, ACTIVE, INACTIVE, SUSPENDED, DEACTIVATED]
+
+    CraftsmanProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        phone:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        status:
+          $ref: '#/components/schemas/CraftsmanStatus'
+        serviceCategories:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceCategory'
+        radiusKm:
+          type: number
+          format: double
+          example: 15.0
+        ratingAvg:
+          type: number
+          format: double
+          example: 4.7
+        completedJobsCount:
+          type: integer
+        address:
+          $ref: '#/components/schemas/Address'
+        walletBalance:
+          type: number
+          format: double
+          example: 230.50
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateCraftsmanRequest:
+      type: object
+      required: [phone, firstName, lastName, categoryIds, radiusKm, address]
+      properties:
+        phone:
+          type: string
+          pattern: '^\+[1-9]\d{6,14}$'
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        categoryIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+        radiusKm:
+          type: number
+          format: double
+        address:
+          $ref: '#/components/schemas/AddressInput'
+
+    UpdateAvailabilityRequest:
+      type: object
+      required: [isOnline]
+      properties:
+        isOnline:
+          type: boolean
+
+    UpdateLocationRequest:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          format: double
+          example: 48.1351
+        longitude:
+          type: number
+          format: double
+          example: 11.5820
+
+    WalletBalance:
+      type: object
+      properties:
+        balance:
+          type: number
+          format: double
+          example: 230.50
+        currency:
+          type: string
+          example: EUR
+        pendingAmount:
+          type: number
+          format: double
+          description: Amount held pending dispute window
+
+    # ── Craftsman Documents ───────────────────────────────────
+    DocumentType:
+      type: string
+      enum: [TRADE_LICENCE, INSURANCE_CERTIFICATE, IDENTITY_DOCUMENT]
+
+    DocumentStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, EXPIRED]
+
+    CraftsmanDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        craftsmanId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/DocumentType'
+        fileUrl:
+          type: string
+          format: uri
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        expiryDate:
+          type: string
+          format: date
+          nullable: true
+        rejectionReason:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        uploadedAt:
+          type: string
+          format: date-time
+
+    ReviewDocumentRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+        rejectionReason:
+          type: string
+          nullable: true
+
+    # ── Service Categories ────────────────────────────────────
+    ServiceCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+        nameDE:
+          type: string
+          example: "Schlüsselnotdienst"
+        nameEN:
+          type: string
+          example: "Emergency Locksmith"
+        icon:
+          type: string
+          nullable: true
+        priceMin:
+          type: number
+          format: double
+        priceMax:
+          type: number
+          format: double
+        active:
+          type: boolean
+
+    CreateServiceCategoryRequest:
+      type: object
+      required: [nameDE, nameEN, priceMin, priceMax]
+      properties:
+        nameDE:
+          type: string
+        nameEN:
+          type: string
+        icon:
+          type: string
+          nullable: true
+        priceMin:
+          type: number
+          format: double
+        priceMax:
+          type: number
+          format: double
+
+    # ── Orders ────────────────────────────────────────────────
+    OrderStatus:
+      type: string
+      enum:
+        - REQUEST_CREATED
+        - MATCHING
+        - PROPOSALS_RECEIVED
+        - CRAFTSMAN_ASSIGNED
+        - CRAFTSMAN_ON_THE_WAY
+        - CRAFTSMAN_ARRIVED
+        - JOB_IN_PROGRESS
+        - PRICE_REVISION_REQUESTED
+        - PRICE_REVISION_ACCEPTED
+        - JOB_COMPLETED
+        - PENDING_CONFIRMATION
+        - PAYMENT_CAPTURED
+        - DISPUTE_OPENED
+        - DISPUTE_RESOLVED
+        - RATING_SUBMITTED
+        - ORDER_CLOSED
+        - CANCELLED
+
+    RequestType:
+      type: string
+      enum: [IMMEDIATE, SCHEDULED]
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        assignedCraftsmanId:
+          type: string
+          format: uuid
+          nullable: true
+        serviceCategory:
+          $ref: '#/components/schemas/ServiceCategory'
+        requestType:
+          $ref: '#/components/schemas/RequestType'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        description:
+          type: string
+        location:
+          $ref: '#/components/schemas/OrderLocation'
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        estimatedPriceMin:
+          type: number
+          format: double
+          nullable: true
+        estimatedPriceMax:
+          type: number
+          format: double
+          nullable: true
+        finalPrice:
+          type: number
+          format: double
+          nullable: true
+        mediaFiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderMedia'
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateOrderRequest:
+      type: object
+      required: [serviceCategoryId, requestType, location]
+      properties:
+        serviceCategoryId:
+          type: integer
+        requestType:
+          $ref: '#/components/schemas/RequestType'
+        description:
+          type: string
+          maxLength: 1000
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Required when requestType is SCHEDULED; min 2 hours from now
+          nullable: true
+        location:
+          $ref: '#/components/schemas/AddressInput'
+
+    OrderLocation:
+      type: object
+      description: Location info — full address hidden from craftsman until assignment
+      properties:
+        postalCode:
+          type: string
+        city:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        fullAddress:
+          type: string
+          description: Only returned after CRAFTSMAN_ASSIGNED; null otherwise
+          nullable: true
+
+    OrderMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [PHOTO, VIDEO, AUDIO, TEXT]
+        fileUrl:
+          type: string
+          format: uri
+        uploadedAt:
+          type: string
+          format: date-time
+
+    CompleteOrderRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          nullable: true
+        finalPrice:
+          type: number
+          format: double
+
+    CustomerConfirmRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          nullable: true
+        review:
+          type: string
+          maxLength: 300
+          nullable: true
+
+    CancelOrderRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
+    PriceRevisionRequest:
+      type: object
+      required: [newPrice, reason]
+      properties:
+        newPrice:
+          type: number
+          format: double
+        reason:
+          type: string
+          maxLength: 500
+
+    # ── Proposals ─────────────────────────────────────────────
+    ProposalStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, REJECTED, EXPIRED, CANCELLED]
+
+    Proposal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        craftsman:
+          $ref: '#/components/schemas/CraftsmanPublicSummary'
+        price:
+          type: number
+          format: double
+        etaMinutes:
+          type: integer
+          description: Estimated arrival time in minutes
+        comment:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ProposalStatus'
+        responseTimeSeconds:
+          type: integer
+          description: Time in seconds from order creation to proposal submission
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    CraftsmanPublicSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        profilePhotoUrl:
+          type: string
+          format: uri
+          nullable: true
+        ratingAvg:
+          type: number
+          format: double
+        completedJobsCount:
+          type: integer
+        distanceKm:
+          type: number
+          format: double
+
+    SubmitProposalRequest:
+      type: object
+      required: [price, etaMinutes]
+      properties:
+        price:
+          type: number
+          format: double
+        etaMinutes:
+          type: integer
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    RejectProposalRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [TOO_FAR, WRONG_CATEGORY, BUSY, PRICE_TOO_LOW, OTHER]
+
+    AcceptProposalRequest:
+      type: object
+      required: [proposalId]
+      properties:
+        proposalId:
+          type: string
+          format: uuid
+
+    # ── Payments ──────────────────────────────────────────────
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+        platformFee:
+          type: number
+          format: double
+        craftsmanNet:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: EUR
+        status:
+          type: string
+          enum: [PENDING, PRE_AUTHORISED, CAPTURED, REFUNDED, FAILED]
+        capturedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PayoutStatus:
+      type: string
+      enum: [PENDING, SCHEDULED, EXECUTED, FAILED]
+
+    Payout:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        craftsmanId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: EUR
+        bankReference:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/PayoutStatus'
+        scheduledAt:
+          type: string
+          format: date-time
+        executedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    RequestPayoutRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Minimum EUR 10
+
+    # ── Ratings ───────────────────────────────────────────────
+    Rating:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        quality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        punctuality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        professionalism:
+          type: integer
+          minimum: 1
+          maximum: 5
+        value:
+          type: integer
+          minimum: 1
+          maximum: 5
+        wouldRecommend:
+          type: boolean
+        comment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    SubmitRatingRequest:
+      type: object
+      required: [quality, punctuality, professionalism, value, wouldRecommend]
+      properties:
+        quality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        punctuality:
+          type: integer
+          minimum: 1
+          maximum: 5
+        professionalism:
+          type: integer
+          minimum: 1
+          maximum: 5
+        value:
+          type: integer
+          minimum: 1
+          maximum: 5
+        wouldRecommend:
+          type: boolean
+        comment:
+          type: string
+          maxLength: 300
+          nullable: true
+
+    # ── Disputes ──────────────────────────────────────────────
+    DisputeStatus:
+      type: string
+      enum: [OPENED, CRAFTSMAN_RESPONDED, UNDER_REVIEW, RESOLVED, APPEALED]
+
+    DisputeResolution:
+      type: string
+      enum: [FULL_REFUND, PARTIAL_REFUND, REJECTED, REDO_REQUESTED, PLATFORM_COMPENSATION]
+
+    Dispute:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        openedBy:
+          type: string
+          format: uuid
+        description:
+          type: string
+        mediaUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+        craftsmanResponse:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/DisputeStatus'
+        resolution:
+          $ref: '#/components/schemas/DisputeResolution'
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    OpenDisputeRequest:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          maxLength: 2000
+        mediaUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
+
+    CraftsmanDisputeResponseRequest:
+      type: object
+      required: [response]
+      properties:
+        response:
+          type: string
+          maxLength: 2000
+        mediaUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
+
+    ResolveDisputeRequest:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          $ref: '#/components/schemas/DisputeResolution'
+        refundAmount:
+          type: number
+          format: double
+          nullable: true
+        adminNote:
+          type: string
+          nullable: true
+
+    # ── Chat ──────────────────────────────────────────────────
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        senderId:
+          type: string
+          format: uuid
+        senderRole:
+          type: string
+          enum: [CUSTOMER, CRAFTSMAN]
+        text:
+          type: string
+          nullable: true
+        mediaUrl:
+          type: string
+          format: uri
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SendMessageRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          nullable: true
+        mediaUrl:
+          type: string
+          format: uri
+          nullable: true
+
+    # ── Notifications ─────────────────────────────────────────
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        message:
+          type: string
+        channel:
+          type: string
+          enum: [PUSH, SMS, EMAIL, IN_APP]
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+
+    # ── Shared ────────────────────────────────────────────────
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+          example: DE
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+
+    AddressInput:
+      type: object
+      required: [street, city, postalCode, latitude, longitude]
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+          default: DE
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string
+
+  # ───────────────────────────────────────────────────────────
+  # RESPONSES
+  # ───────────────────────────────────────────────────────────
+  responses:
+    Unauthorized:
+      description: Unauthorized — missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden — insufficient role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflict — duplicate or state mismatch
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+# ─────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────
+paths:
+
+  # ── Auth ──────────────────────────────────────────────────
+  /auth/otp/send:
+    post:
+      tags: [Auth]
+      summary: Send OTP
+      description: Send a 6-digit OTP to the provided phone number. Max 3 retries; 15-minute lockout after.
+      security: []
+      operationId: sendOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendOtpRequest'
+      responses:
+        '200':
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendOtpResponse'
+        '429':
+          description: Too many requests — lockout active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify OTP & obtain tokens
+      security: []
+      operationId: verifyOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      security: []
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: New token pair issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout & revoke refresh token
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Logged out successfully
+
+  /auth/consent:
+    post:
+      tags: [Auth]
+      summary: Record GDPR consent
+      operationId: recordConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '204':
+          description: Consent recorded
+
+  # ── Customers ─────────────────────────────────────────────
+  /customers/me:
+    get:
+      tags: [Customers]
+      summary: Get own customer profile
+      operationId: getMyCustomerProfile
+      responses:
+        '200':
+          description: Customer profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [Customers]
+      summary: Update own customer profile
+      operationId: updateMyCustomerProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerProfileRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    delete:
+      tags: [Customers]
+      summary: Delete own customer account
+      operationId: deleteMyCustomerProfile
+      responses:
+        '204':
+          description: Account deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Craftsmen ─────────────────────────────────────────────
+  /craftsmen:
+    post:
+      tags: [Craftsmen, Admin]
+      summary: Create craftsman account (Admin only)
+      operationId: createCraftsman
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCraftsmanRequest'
+      responses:
+        '201':
+          description: Craftsman account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /craftsmen/{craftsmanId}:
+    get:
+      tags: [Craftsmen]
+      summary: Get public craftsman profile
+      operationId: getCraftsmanProfile
+      parameters:
+        - name: craftsmanId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Craftsman profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /craftsmen/{craftsmanId}/status:
+    patch:
+      tags: [Craftsmen, Admin]
+      summary: Update craftsman status (Admin only)
+      operationId: updateCraftsmanStatus
+      parameters:
+        - name: craftsmanId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: '#/components/schemas/CraftsmanStatus'
+                reason:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanProfile'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /craftsmen/me/availability:
+    patch:
+      tags: [Craftsmen]
+      summary: Toggle online/offline availability
+      operationId: updateMyAvailability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAvailabilityRequest'
+      responses:
+        '200':
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /craftsmen/me/location:
+    patch:
+      tags: [Craftsmen]
+      summary: Update GPS location
+      operationId: updateMyLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocationRequest'
+      responses:
+        '204':
+          description: Location updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /craftsmen/me/wallet:
+    get:
+      tags: [Craftsmen]
+      summary: Get own wallet balance
+      operationId: getMyWallet
+      responses:
+        '200':
+          description: Wallet balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalance'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Craftsman Documents ───────────────────────────────────
+  /craftsmen/{craftsmanId}/documents:
+    get:
+      tags: [CraftsmanDocuments, Admin]
+      summary: List craftsman documents
+      operationId: listCraftsmanDocuments
+      parameters:
+        - name: craftsmanId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CraftsmanDocument'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [CraftsmanDocuments]
+      summary: Upload a document
+      operationId: uploadCraftsmanDocument
+      parameters:
+        - name: craftsmanId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, file]
+              properties:
+                type:
+                  $ref: '#/components/schemas/DocumentType'
+                file:
+                  type: string
+                  format: binary
+                expiryDate:
+                  type: string
+                  format: date
+                  nullable: true
+      responses:
+        '201':
+          description: Document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanDocument'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /craftsmen/{craftsmanId}/documents/{documentId}/review:
+    patch:
+      tags: [CraftsmanDocuments, Admin]
+      summary: Approve or reject a document (Admin only)
+      operationId: reviewCraftsmanDocument
+      parameters:
+        - name: craftsmanId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDocumentRequest'
+      responses:
+        '200':
+          description: Document reviewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanDocument'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Service Categories ────────────────────────────────────
+  /service-categories:
+    get:
+      tags: [ServiceCategories]
+      summary: List all active service categories
+      operationId: listServiceCategories
+      security: []
+      responses:
+        '200':
+          description: Service categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceCategory'
+
+    post:
+      tags: [ServiceCategories, Admin]
+      summary: Create service category (Admin only)
+      operationId: createServiceCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceCategoryRequest'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceCategory'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /service-categories/{categoryId}:
+    put:
+      tags: [ServiceCategories, Admin]
+      summary: Update service category (Admin only)
+      operationId: updateServiceCategory
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceCategoryRequest'
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceCategory'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [ServiceCategories, Admin]
+      summary: Deactivate service category (Admin only)
+      operationId: deactivateServiceCategory
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Category deactivated
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Orders ────────────────────────────────────────────────
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Create a new service order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+    get:
+      tags: [Orders]
+      summary: List orders for the authenticated user
+      operationId: listOrders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated order list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order details
+      operationId: getOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{orderId}/media:
+    post:
+      tags: [Orders]
+      summary: Upload media for an order (photo/video/audio)
+      operationId: uploadOrderMedia
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, file]
+              properties:
+                type:
+                  type: string
+                  enum: [PHOTO, VIDEO, AUDIO]
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Media uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderMedia'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /orders/{orderId}/on-the-way:
+    post:
+      tags: [Orders]
+      summary: Craftsman marks as on the way
+      operationId: markOrderOnTheWay
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /orders/{orderId}/confirm-arrival:
+    post:
+      tags: [Orders]
+      summary: Craftsman confirms arrival at location
+      operationId: confirmArrival
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Arrival confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/start:
+    post:
+      tags: [Orders]
+      summary: Craftsman starts the job
+      operationId: startJob
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/price-revision:
+    post:
+      tags: [Orders]
+      summary: Craftsman requests a price revision
+      operationId: requestPriceRevision
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceRevisionRequest'
+      responses:
+        '200':
+          description: Price revision requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/price-revision/accept:
+    post:
+      tags: [Orders]
+      summary: Customer accepts the price revision
+      operationId: acceptPriceRevision
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Price revision accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/price-revision/reject:
+    post:
+      tags: [Orders]
+      summary: Customer rejects the price revision
+      operationId: rejectPriceRevision
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Price revision rejected; order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/complete:
+    post:
+      tags: [Orders]
+      summary: Craftsman marks job as complete
+      operationId: completeOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteOrderRequest'
+      responses:
+        '200':
+          description: Job completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/customer-confirm:
+    post:
+      tags: [Orders]
+      summary: Customer confirms job completion
+      operationId: customerConfirmOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerConfirmRequest'
+      responses:
+        '200':
+          description: Completion confirmed; payment triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel an order
+      operationId: cancelOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderRequest'
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ── Proposals ─────────────────────────────────────────────
+  /orders/{orderId}/proposals:
+    get:
+      tags: [Proposals]
+      summary: List proposals for an order (Customer view)
+      operationId: listOrderProposals
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ranked proposal list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proposal'
+
+    post:
+      tags: [Proposals]
+      summary: Craftsman submits a price proposal
+      operationId: submitProposal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitProposalRequest'
+      responses:
+        '201':
+          description: Proposal submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /orders/{orderId}/proposals/accept:
+    post:
+      tags: [Proposals]
+      summary: Customer accepts a proposal
+      operationId: acceptProposal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptProposalRequest'
+      responses:
+        '200':
+          description: Proposal accepted; payment pre-authorised
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /orders/{orderId}/proposals/{proposalId}/reject:
+    post:
+      tags: [Proposals]
+      summary: Craftsman rejects a job request
+      operationId: rejectProposal
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: proposalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectProposalRequest'
+      responses:
+        '204':
+          description: Proposal rejected
+
+  # ── Payments ──────────────────────────────────────────────
+  /orders/{orderId}/payment:
+    get:
+      tags: [Payments]
+      summary: Get payment details for an order
+      operationId: getOrderPayment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Payment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /craftsmen/me/payouts:
+    get:
+      tags: [Payments]
+      summary: List own payouts
+      operationId: listMyPayouts
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Payout history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payout'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+
+    post:
+      tags: [Payments]
+      summary: Request manual payout (min EUR 10)
+      operationId: requestPayout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestPayoutRequest'
+      responses:
+        '201':
+          description: Payout scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payout'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  # ── Ratings ───────────────────────────────────────────────
+  /orders/{orderId}/rating:
+    post:
+      tags: [Ratings]
+      summary: Customer submits rating for a completed order
+      operationId: submitRating
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRatingRequest'
+      responses:
+        '201':
+          description: Rating submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Ratings]
+      summary: Get rating for an order
+      operationId: getOrderRating
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Rating details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Disputes ──────────────────────────────────────────────
+  /orders/{orderId}/dispute:
+    post:
+      tags: [Disputes]
+      summary: Customer opens a dispute
+      operationId: openDispute
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenDisputeRequest'
+      responses:
+        '201':
+          description: Dispute opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Disputes]
+      summary: Get dispute for an order
+      operationId: getOrderDispute
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dispute details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{orderId}/dispute/respond:
+    post:
+      tags: [Disputes]
+      summary: Craftsman responds to a dispute
+      operationId: respondToDispute
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CraftsmanDisputeResponseRequest'
+      responses:
+        '200':
+          description: Response submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+
+  /orders/{orderId}/dispute/resolve:
+    post:
+      tags: [Disputes, Admin]
+      summary: Admin resolves a dispute
+      operationId: resolveDispute
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDisputeRequest'
+      responses:
+        '200':
+          description: Dispute resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dispute'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Chat ──────────────────────────────────────────────────
+  /orders/{orderId}/messages:
+    get:
+      tags: [Chat]
+      summary: List in-app chat messages for an order
+      operationId: listChatMessages
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Chat messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+
+    post:
+      tags: [Chat]
+      summary: Send a chat message
+      operationId: sendChatMessage
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+
+  # ── Notifications ─────────────────────────────────────────
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications for authenticated user
+      operationId: listNotifications
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+
+  /notifications/{notificationId}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      operationId: markNotificationRead
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Marked as read
+
+  /notifications/read-all:
+    patch:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      operationId: markAllNotificationsRead
+      responses:
+        '204':
+          description: All marked as read
+
+  # ── Admin ─────────────────────────────────────────────────
+  /admin/orders:
+    get:
+      tags: [Admin]
+      summary: List all orders (Admin only)
+      operationId: adminListOrders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: customerId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: craftsmanId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: All orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/orders/{orderId}/force-close:
+    post:
+      tags: [Admin]
+      summary: Force-close a stuck order (Admin only)
+      operationId: forceCloseOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Order force-closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/disputes:
+    get:
+      tags: [Admin]
+      summary: List all open disputes (Admin only)
+      operationId: adminListDisputes
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/DisputeStatus'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Dispute list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dispute'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/craftsmen:
+    get:
+      tags: [Admin]
+      summary: List all craftsmen (Admin only)
+      operationId: adminListCraftsmen
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/CraftsmanStatus'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Craftsmen list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CraftsmanProfile'
+                  meta:
+                    $ref: '#/components/schemas/PageMeta'
+        '403':
+          $ref: '#/components/responses/Forbidden'

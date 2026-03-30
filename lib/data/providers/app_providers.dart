@@ -362,6 +362,22 @@ final craftsmanWalletProvider =
   return WalletBalance.fromJson(response.data);
 });
 
+/// Fetches open orders (MATCHING / PROPOSALS_RECEIVED) that match this
+/// craftsman's service categories and geographic radius.
+///
+/// Pull-based complement to FCM push — discovers orders even when a push
+/// notification was missed.
+final availableOrdersProvider =
+    FutureProvider.autoDispose<List<Order>>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  final response = await api.getAvailableOrders();
+  final raw = response.data;
+  final list = raw is List ? raw : (raw['data'] ?? raw['content'] ?? raw);
+  return (list as List)
+      .map((e) => Order.fromJson(e as Map<String, dynamic>))
+      .toList();
+});
+
 // ═══════════════════════════════════════════════════════════════
 // NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════
@@ -472,3 +488,62 @@ final adminDisputesProvider =
   );
   return _parsePaginated(response.data, Dispute.fromJson);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// CREATE CRAFTSMAN (Admin only)
+// ═══════════════════════════════════════════════════════════════
+
+class CreateCraftsmanState {
+  final bool isLoading;
+  final String? error;
+  final CraftsmanProfile? created;
+
+  const CreateCraftsmanState({
+    this.isLoading = false,
+    this.error,
+    this.created,
+  });
+
+  CreateCraftsmanState copyWith({
+    bool? isLoading,
+    String? error,
+    CraftsmanProfile? created,
+    bool clearError = false,
+  }) =>
+      CreateCraftsmanState(
+        isLoading: isLoading ?? this.isLoading,
+        error: clearError ? null : (error ?? this.error),
+        created: created ?? this.created,
+      );
+}
+
+class CreateCraftsmanNotifier extends StateNotifier<CreateCraftsmanState> {
+  final ApiService _api;
+
+  CreateCraftsmanNotifier(this._api) : super(const CreateCraftsmanState());
+
+  Future<void> submit(CreateCraftsmanRequest request) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _api.createCraftsman(request.toJson());
+      final data = response.data;
+      final profile = CraftsmanProfile.fromJson(
+        data is Map<String, dynamic> ? data : data as Map<String, dynamic>,
+      );
+      state = state.copyWith(isLoading: false, created: profile);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  void reset() => state = const CreateCraftsmanState();
+}
+
+final createCraftsmanProvider = StateNotifierProvider.autoDispose<
+    CreateCraftsmanNotifier, CreateCraftsmanState>(
+  (ref) => CreateCraftsmanNotifier(ref.watch(apiServiceProvider)),
+);
+
