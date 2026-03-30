@@ -411,7 +411,10 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
     );
 
     // ── 5. Submit via Notifier ───────────────────────────────
-    ref.read(createOrderProvider.notifier).submit(request);
+    ref.read(createOrderProvider.notifier).submit(
+      request,
+      mediaPaths: _mediaItems.map((m) => m.path).toList(),
+    );
   }
 
   @override

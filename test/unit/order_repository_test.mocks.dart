@@ -840,4 +840,176 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
         returnValue: _i4.Future<void>.value(),
         returnValueForMissingStub: _i4.Future<void>.value(),
       ) as _i4.Future<void>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> adminListOrders({
+    String? status,
+    String? customerId,
+    String? craftsmanId,
+    int? page = 0,
+    int? size = 20,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #adminListOrders,
+          [],
+          {
+            #status: status,
+            #customerId: customerId,
+            #craftsmanId: craftsmanId,
+            #page: page,
+            #size: size,
+          },
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #adminListOrders,
+            [],
+            {
+              #status: status,
+              #customerId: customerId,
+              #craftsmanId: craftsmanId,
+              #page: page,
+              #size: size,
+            },
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> adminListCraftsmen({
+    String? status,
+    int? page = 0,
+    int? size = 20,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #adminListCraftsmen,
+          [],
+          {
+            #status: status,
+            #page: page,
+            #size: size,
+          },
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #adminListCraftsmen,
+            [],
+            {
+              #status: status,
+              #page: page,
+              #size: size,
+            },
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> adminListDisputes({
+    String? status,
+    int? page = 0,
+    int? size = 20,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #adminListDisputes,
+          [],
+          {
+            #status: status,
+            #page: page,
+            #size: size,
+          },
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #adminListDisputes,
+            [],
+            {
+              #status: status,
+              #page: page,
+              #size: size,
+            },
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> updateCraftsmanStatus(
+    String? id,
+    String? status, {
+    String? reason,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateCraftsmanStatus,
+          [
+            id,
+            status,
+          ],
+          {#reason: reason},
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #updateCraftsmanStatus,
+            [
+              id,
+              status,
+            ],
+            {#reason: reason},
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> resolveDispute(
+    String? orderId,
+    String? resolution,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #resolveDispute,
+          [
+            orderId,
+            resolution,
+          ],
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #resolveDispute,
+            [
+              orderId,
+              resolution,
+            ],
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> createCraftsman(
+          Map<String, dynamic>? data) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #createCraftsman,
+          [data],
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #createCraftsman,
+            [data],
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
 }

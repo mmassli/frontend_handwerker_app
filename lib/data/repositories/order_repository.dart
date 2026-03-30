@@ -36,7 +36,13 @@ class OrderRepository {
   /// Sends the exact DTO expected by POST /api/v1/orders:
   ///   { serviceCategoryId, requestType, descriptionText, lat, lng,
   ///     addressEncrypted, scheduledAt }
-  Future<Order> createOrder(CreateOrderRequest request) async {
+  ///
+  /// [mediaPaths] are optional local file paths that are uploaded as
+  /// multipart media parts alongside the order JSON.
+  Future<Order> createOrder(
+    CreateOrderRequest request, {
+    List<String>? mediaPaths,
+  }) async {
     // Validate before sending
     if (request.lat.isNaN || request.lng.isNaN) {
       throw const ValidationException(
@@ -51,7 +57,7 @@ class OrderRepository {
     }
 
     try {
-      final response = await _api.createOrder(request.toJson());
+      final response = await _api.createOrder(request.toJson(), mediaPaths: mediaPaths);
       return Order.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _mapDioException(e);

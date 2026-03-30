@@ -53,17 +53,22 @@ class MockOrderRepository extends _i1.Mock implements _i3.OrderRepository {
       ) as _i4.Future<List<_i2.ServiceCategory>>);
 
   @override
-  _i4.Future<_i2.Order> createOrder(_i2.CreateOrderRequest? request) =>
+  _i4.Future<_i2.Order> createOrder(
+    _i2.CreateOrderRequest? request, {
+    List<String>? mediaPaths,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #createOrder,
           [request],
+          {#mediaPaths: mediaPaths},
         ),
         returnValue: _i4.Future<_i2.Order>.value(_FakeOrder_0(
           this,
           Invocation.method(
             #createOrder,
             [request],
+            {#mediaPaths: mediaPaths},
           ),
         )),
       ) as _i4.Future<_i2.Order>);

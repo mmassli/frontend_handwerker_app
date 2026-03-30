@@ -14,7 +14,7 @@ class AppEnvironment {
   /// Full base URL including /api/v1 path prefix.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.178.70:3000/api/v1',
+    defaultValue: 'http://192.168.178.54:3000/api/v1',
   );
 
   /// AES-256 key — MUST be exactly 32 UTF-8 characters.

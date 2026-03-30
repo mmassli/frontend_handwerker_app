@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:handwerker_app/core/constants/api_constants.dart';
@@ -96,8 +98,40 @@ class ApiService {
       _dio.get(ApiConstants.serviceCategories);
 
   // ── Orders ────────────────────────────────────────────────
-  Future<Response> createOrder(Map<String, dynamic> data) =>
-      _dio.post(ApiConstants.orders, data: data);
+  /// POST /orders as multipart/form-data.
+  ///
+  /// The backend uses `@RequestPart("order")` for the DTO and
+  /// `@RequestPart("media")` for optional files, so:
+  ///  - "order" part → JSON string with Content-Type: application/json
+  ///  - "media" parts → one entry per file path (optional)
+  Future<Response> createOrder(
+    Map<String, dynamic> orderData, {
+    List<String>? mediaPaths,
+  }) async {
+    final formData = FormData();
+
+    // Attach the order DTO as a JSON part so Spring's @RequestPart can
+    // deserialize it with MappingJackson2HttpMessageConverter.
+    formData.files.add(MapEntry(
+      'order',
+      MultipartFile.fromString(
+        jsonEncode(orderData),
+        contentType: DioMediaType('application', 'json'),
+      ),
+    ));
+
+    // Attach any media files the customer chose.
+    if (mediaPaths != null && mediaPaths.isNotEmpty) {
+      for (final path in mediaPaths) {
+        formData.files.add(MapEntry(
+          'media',
+          await MultipartFile.fromFile(path),
+        ));
+      }
+    }
+
+    return _dio.post(ApiConstants.orders, data: formData);
+  }
 
   Future<Response> listOrders({String? status, int page = 0, int size = 20}) =>
       _dio.get(ApiConstants.orders, queryParameters: {

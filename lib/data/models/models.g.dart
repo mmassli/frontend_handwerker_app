@@ -49,6 +49,7 @@ AuthTokenResponse _$AuthTokenResponseFromJson(Map<String, dynamic> json) =>
       expiresIn: (json['expiresIn'] as num?)?.toInt(),
       isNewUser: json['isNewUser'] as bool?,
       requiresConsent: json['requiresConsent'] as bool?,
+      role: json['role'] as String?,
     );
 
 Map<String, dynamic> _$AuthTokenResponseToJson(AuthTokenResponse instance) =>
@@ -58,6 +59,7 @@ Map<String, dynamic> _$AuthTokenResponseToJson(AuthTokenResponse instance) =>
       'expiresIn': instance.expiresIn,
       'isNewUser': instance.isNewUser,
       'requiresConsent': instance.requiresConsent,
+      'role': instance.role,
     };
 
 Address _$AddressFromJson(Map<String, dynamic> json) => Address(
@@ -383,11 +385,11 @@ Map<String, dynamic> _$CreateOrderRequestToJson(CreateOrderRequest instance) =>
     <String, dynamic>{
       'serviceCategoryId': instance.serviceCategoryId,
       'requestType': _$RequestTypeEnumMap[instance.requestType]!,
-      'descriptionText': instance.descriptionText,
+      if (instance.descriptionText case final value?) 'descriptionText': value,
       'lat': instance.lat,
       'lng': instance.lng,
       'addressEncrypted': instance.addressEncrypted,
-      'scheduledAt': instance.scheduledAt,
+      if (instance.scheduledAt case final value?) 'scheduledAt': value,
     };
 
 Proposal _$ProposalFromJson(Map<String, dynamic> json) => Proposal(

@@ -325,10 +325,13 @@ class CreateOrderNotifier extends StateNotifier<CreateOrderState> {
   ///
   /// On success, [state.createdOrder] is populated.
   /// On failure, [state.error] is set to a typed [AppException].
-  Future<void> submit(CreateOrderRequest request) async {
+  Future<void> submit(
+    CreateOrderRequest request, {
+    List<String>? mediaPaths,
+  }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final order = await _repository.createOrder(request);
+      final order = await _repository.createOrder(request, mediaPaths: mediaPaths);
       state = state.copyWith(isLoading: false, createdOrder: order);
     } on AppException catch (e) {
       state = state.copyWith(isLoading: false, error: e);
