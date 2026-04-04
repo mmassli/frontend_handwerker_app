@@ -284,8 +284,12 @@ final proposalsProvider =
     FutureProvider.family<List<Proposal>, String>((ref, orderId) async {
   final api = ref.watch(apiServiceProvider);
   final response = await api.listProposals(orderId);
-  return (response.data as List)
-      .map((e) => Proposal.fromJson(e))
+  // Backend may return a plain list OR a paginated envelope
+  // { "data": [...], "meta": {...} } / { "content": [...] }
+  final raw = response.data;
+  final list = raw is List ? raw : (raw['data'] ?? raw['content'] ?? raw);
+  return (list as List)
+      .map((e) => Proposal.fromJson(e as Map<String, dynamic>))
       .toList();
 });
 

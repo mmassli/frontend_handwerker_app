@@ -458,7 +458,47 @@ class Order {
     this.completedAt,
   });
 
-  factory Order.fromJson(Map<String, dynamic> json) => _$OrderFromJson(json);
+  /// Parses an [Order] from JSON, normalising differences between the standard
+  /// customer-facing response and the craftsman-enriched response shapes:
+  ///
+  /// | Standard (customer)        | Craftsman-enriched          |
+  /// |----------------------------|-----------------------------|
+  /// | `"mediaFiles": [{fileUrl}]`| `"media": [{url}]`          |
+  /// | `"description": "…"`       | `"descriptionText": "…"`    |
+  ///
+  /// Both shapes are accepted so that `orderDetailProvider` works correctly
+  /// regardless of which endpoint populates the cache.
+  factory Order.fromJson(Map<String, dynamic> json) {
+    final m = Map<String, dynamic>.from(json);
+
+    // ── description fallback ─────────────────────────────────
+    // Some craftsman endpoints return the field as "descriptionText".
+    if ((m['description'] == null || (m['description'] as String?)?.isEmpty == true) &&
+        m['descriptionText'] != null) {
+      m['description'] = m['descriptionText'];
+    }
+
+    // ── media / mediaFiles normalisation ─────────────────────
+    // Craftsman-enriched endpoints return "media" (list of {url, …})
+    // while the standard Order schema uses "mediaFiles" (list of {fileUrl, …}).
+    if ((m['mediaFiles'] == null) && m['media'] is List) {
+      m['mediaFiles'] = (m['media'] as List).map((e) {
+        if (e is Map<String, dynamic>) {
+          return <String, dynamic>{
+            'id': e['id'],
+            'type': e['type'],
+            // map 'url' → 'fileUrl' so OrderMedia.fromJson finds the value
+            'fileUrl': e['fileUrl'] ?? e['url'],
+            'uploadedAt': e['uploadedAt'] ?? e['createdAt'],
+          };
+        }
+        return e;
+      }).toList();
+    }
+
+    return _$OrderFromJson(m);
+  }
+
   Map<String, dynamic> toJson() => _$OrderToJson(this);
 
   bool get isActive => status != OrderStatus.orderClosed &&
@@ -539,8 +579,18 @@ class OrderMedia {
   final DateTime? uploadedAt;
 
   OrderMedia({this.id, this.type, this.fileUrl, this.uploadedAt});
-  factory OrderMedia.fromJson(Map<String, dynamic> json) =>
-      _$OrderMediaFromJson(json);
+
+  /// Handles both standard format (`fileUrl`) and craftsman-enriched format
+  /// (`url`) returned by `/craftsmen/me/*` endpoints.
+  factory OrderMedia.fromJson(Map<String, dynamic> json) => OrderMedia(
+        id: json['id'] as String?,
+        type: json['type'] as String?,
+        fileUrl: (json['fileUrl'] ?? json['url']) as String?,
+        uploadedAt: json['uploadedAt'] == null
+            ? null
+            : DateTime.tryParse(json['uploadedAt'] as String),
+      );
+
   Map<String, dynamic> toJson() => _$OrderMediaToJson(this);
 }
 

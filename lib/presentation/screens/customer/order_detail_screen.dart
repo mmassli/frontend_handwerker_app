@@ -1,11 +1,83 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:handwerker_app/core/constants/app_environment.dart';
 import 'package:handwerker_app/core/theme/app_theme.dart';
 import 'package:handwerker_app/core/animations/micro_animations.dart';
 import 'package:handwerker_app/core/navigation/app_router.dart';
 import 'package:handwerker_app/data/models/models.dart';
 import 'package:handwerker_app/data/providers/app_providers.dart';
+
+// Resolves relative media paths to fully-qualified URLs (same logic as
+// job_request_screen.dart so behaviour is consistent across both views).
+String _resolveMediaUrl(String raw) {
+  if (raw.isEmpty) return raw;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  final base = AppEnvironment.baseUrl;
+  final apiIdx = base.indexOf('/api/');
+  final serverRoot = apiIdx >= 0 ? base.substring(0, apiIdx) : base;
+  return raw.startsWith('/') ? '$serverRoot$raw' : '$serverRoot/$raw';
+}
+
+void _openMediaViewer(BuildContext context, OrderMedia media) {
+  final raw = media.fileUrl;
+  if (raw == null || raw.isEmpty) return;
+  final url = _resolveMediaUrl(raw);
+  final type = media.type?.toUpperCase() ?? 'PHOTO';
+
+  if (type == 'VIDEO') {
+    // Simple full-screen placeholder for video
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.slate800,
+        content: Text('Video: $url',
+            style: const TextStyle(color: AppTheme.slate300, fontSize: 12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Schließen'),
+          )
+        ],
+      ),
+    );
+  } else {
+    // Full-screen image viewer
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(
+                      child: CircularProgressIndicator(color: AppTheme.amber)),
+                  errorWidget: (_, __, ___) => const Center(
+                      child: Icon(Icons.broken_image_rounded,
+                          color: AppTheme.slate400, size: 64)),
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class OrderDetailScreen extends ConsumerWidget {
   final String orderId;
@@ -33,8 +105,14 @@ class OrderDetailScreen extends ConsumerWidget {
         ],
       ),
       body: orderAsync.when(
-        data: (order) => SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+        data: (order) => RefreshIndicator(
+          color: AppTheme.amber,
+          backgroundColor: AppTheme.slate800,
+          onRefresh: () async =>
+              ref.invalidate(orderDetailProvider(orderId)),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -198,24 +276,55 @@ class OrderDetailScreen extends ConsumerWidget {
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           itemCount: order.mediaFiles!.length,
-                          itemBuilder: (ctx, i) => Container(
-                            width: 80,
-                            height: 80,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: AppTheme.slate800,
-                              borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusSM),
-                              border:
-                                  Border.all(color: AppTheme.slate700),
-                            ),
-                            child: Icon(
-                              order.mediaFiles![i].type == 'VIDEO'
-                                  ? Icons.videocam_rounded
-                                  : Icons.image_rounded,
-                              color: AppTheme.slate500,
-                            ),
-                          ),
+                          itemBuilder: (ctx, i) {
+                            final media = order.mediaFiles![i];
+                            final isVideo =
+                                media.type?.toUpperCase() == 'VIDEO';
+                            final isAudio =
+                                media.type?.toUpperCase() == 'AUDIO';
+                            final isPhoto = !isVideo && !isAudio;
+                            return GestureDetector(
+                              onTap: () => _openMediaViewer(context, media),
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.slate800,
+                                  borderRadius: BorderRadius.circular(
+                                      AppTheme.radiusSM),
+                                  border: Border.all(
+                                      color: AppTheme.slate600),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                      AppTheme.radiusSM - 1),
+                                  child: isPhoto && media.fileUrl != null
+                                      ? CachedNetworkImage(
+                                          imageUrl: _resolveMediaUrl(
+                                              media.fileUrl!),
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          placeholder: (_, __) => const Icon(
+                                              Icons.image_rounded,
+                                              color: AppTheme.slate500),
+                                          errorWidget: (_, __, ___) =>
+                                              const Icon(Icons.image_rounded,
+                                                  color: AppTheme.slate500),
+                                        )
+                                      : Icon(
+                                          isVideo
+                                              ? Icons.videocam_rounded
+                                              : isAudio
+                                                  ? Icons.mic_rounded
+                                                  : Icons.image_rounded,
+                                          color: AppTheme.slate500,
+                                        ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -226,7 +335,9 @@ class OrderDetailScreen extends ConsumerWidget {
               const SizedBox(height: 32),
 
               // Action: View proposals when proposals have been received
-              if (order.status == OrderStatus.proposalsReceived)
+              // Also show during MATCHING in case the status transition is delayed
+              if (order.status == OrderStatus.proposalsReceived ||
+                  order.status == OrderStatus.matching)
                 SlideUpFadeIn(
                   delay: const Duration(milliseconds: 400),
                   child: Column(
@@ -364,7 +475,8 @@ class OrderDetailScreen extends ConsumerWidget {
                 ),
             ],
           ),
-        ),
+        ), // SingleChildScrollView
+        ), // RefreshIndicator
         loading: () => const Center(
           child: CircularProgressIndicator(color: AppTheme.amber),
         ),

@@ -4,10 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:video_player/video_player.dart';
+import 'package:handwerker_app/core/constants/app_environment.dart';
 import 'package:handwerker_app/core/theme/app_theme.dart';
 import 'package:handwerker_app/core/animations/micro_animations.dart';
 import 'package:handwerker_app/data/models/models.dart';
 import 'package:handwerker_app/data/providers/app_providers.dart';
+
+// ─────────────────────────────────────────────────────────────
+// Media URL resolver
+// The backend sometimes returns paths relative to the server root
+// (e.g. "/uploads/media/…") instead of absolute URLs.
+// ─────────────────────────────────────────────────────────────
+String _resolveMediaUrl(String raw) {
+  if (raw.isEmpty) return raw;
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  // Strip /api/vX suffix to get the bare server root
+  final base = AppEnvironment.baseUrl; // e.g. http://192.168.178.54:3000/api/v1
+  final apiIdx = base.indexOf('/api/');
+  final serverRoot = apiIdx >= 0 ? base.substring(0, apiIdx) : base;
+  return raw.startsWith('/') ? '$serverRoot$raw' : '$serverRoot/$raw';
+}
 
 // ─────────────────────────────────────────────────────────────
 // Main screen
@@ -61,7 +77,7 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
   }
 
   void _openMedia(BuildContext context, OrderMedia media) {
-    final url = media.fileUrl;
+    final url = media.fileUrl == null ? null : _resolveMediaUrl(media.fileUrl!);
     if (url == null || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Medien-URL nicht verfügbar')),
@@ -291,14 +307,12 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
                                     alignment: Alignment.center,
                                     children: [
                                       // For photos: try to show thumbnail
-                                      if (isPhoto &&
-                                          media.fileUrl != null &&
-                                          media.fileUrl!.startsWith('http'))
+                                      if (isPhoto && media.fileUrl != null)
                                         ClipRRect(
                                           borderRadius:
                                               BorderRadius.circular(10),
                                           child: CachedNetworkImage(
-                                            imageUrl: media.fileUrl!,
+                                            imageUrl: _resolveMediaUrl(media.fileUrl!),
                                             width: 72,
                                             height: 72,
                                             fit: BoxFit.cover,
@@ -575,20 +589,15 @@ class _ImageViewerDialog extends StatelessWidget {
         children: [
           Center(
             child: InteractiveViewer(
-              child: url.startsWith('http')
-                  ? CachedNetworkImage(
-                      imageUrl: url,
-                      fit: BoxFit.contain,
-                      placeholder: (_, __) => const Center(
-                          child: CircularProgressIndicator(
-                              color: AppTheme.amber)),
-                      errorWidget: (_, __, ___) => const Center(
-                          child: Icon(Icons.broken_image_rounded,
-                              color: AppTheme.slate400, size: 64)),
-                    )
-                  : const Center(
-                      child: Text('Bild nicht erreichbar',
-                          style: TextStyle(color: AppTheme.slate400))),
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+                placeholder: (_, __) => const Center(
+                    child: CircularProgressIndicator(color: AppTheme.amber)),
+                errorWidget: (_, __, ___) => const Center(
+                    child: Icon(Icons.broken_image_rounded,
+                        color: AppTheme.slate400, size: 64)),
+              ),
             ),
           ),
           Positioned(
