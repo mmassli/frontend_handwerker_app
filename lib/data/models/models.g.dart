@@ -115,6 +115,7 @@ Map<String, dynamic> _$CustomerProfileToJson(CustomerProfile instance) =>
 CraftsmanProfile _$CraftsmanProfileFromJson(Map<String, dynamic> json) =>
     CraftsmanProfile(
       id: json['id'] as String?,
+      userId: json['userId'] as String?,
       phone: json['phone'] as String?,
       firstName: json['firstName'] as String?,
       lastName: json['lastName'] as String?,
@@ -125,11 +126,14 @@ CraftsmanProfile _$CraftsmanProfileFromJson(Map<String, dynamic> json) =>
           .toList(),
       radiusKm: (json['radiusKm'] as num?)?.toDouble(),
       ratingAvg: (json['ratingAvg'] as num?)?.toDouble(),
+      ratingCount: (json['ratingCount'] as num?)?.toInt(),
       completedJobsCount: (json['completedJobsCount'] as num?)?.toInt(),
       address: json['address'] == null
           ? null
           : Address.fromJson(json['address'] as Map<String, dynamic>),
       walletBalance: (json['walletBalance'] as num?)?.toDouble(),
+      lat: (json['lat'] as num?)?.toDouble(),
+      lng: (json['lng'] as num?)?.toDouble(),
       createdAt: json['createdAt'] == null
           ? null
           : DateTime.parse(json['createdAt'] as String),
@@ -138,6 +142,7 @@ CraftsmanProfile _$CraftsmanProfileFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$CraftsmanProfileToJson(CraftsmanProfile instance) =>
     <String, dynamic>{
       'id': instance.id,
+      'userId': instance.userId,
       'phone': instance.phone,
       'firstName': instance.firstName,
       'lastName': instance.lastName,
@@ -146,9 +151,12 @@ Map<String, dynamic> _$CraftsmanProfileToJson(CraftsmanProfile instance) =>
       'serviceCategories': instance.serviceCategories,
       'radiusKm': instance.radiusKm,
       'ratingAvg': instance.ratingAvg,
+      'ratingCount': instance.ratingCount,
       'completedJobsCount': instance.completedJobsCount,
       'address': instance.address,
       'walletBalance': instance.walletBalance,
+      'lat': instance.lat,
+      'lng': instance.lng,
       'createdAt': instance.createdAt?.toIso8601String(),
     };
 
@@ -267,6 +275,9 @@ Order _$OrderFromJson(Map<String, dynamic> json) => Order(
           ? null
           : ServiceCategory.fromJson(
               json['serviceCategory'] as Map<String, dynamic>),
+      serviceCategorySlug: json['serviceCategorySlug'] as String?,
+      serviceCategoryNameDe: json['serviceCategoryNameDe'] as String?,
+      postleitzahl: json['postleitzahl'] as String?,
       requestType:
           $enumDecodeNullable(_$RequestTypeEnumMap, json['requestType']),
       status: $enumDecodeNullable(_$OrderStatusEnumMap, json['status']),
@@ -297,6 +308,9 @@ Map<String, dynamic> _$OrderToJson(Order instance) => <String, dynamic>{
       'customerId': instance.customerId,
       'assignedCraftsmanId': instance.assignedCraftsmanId,
       'serviceCategory': instance.serviceCategory,
+      'serviceCategorySlug': instance.serviceCategorySlug,
+      'serviceCategoryNameDe': instance.serviceCategoryNameDe,
+      'postleitzahl': instance.postleitzahl,
       'requestType': _$RequestTypeEnumMap[instance.requestType],
       'status': _$OrderStatusEnumMap[instance.status],
       'description': instance.description,
@@ -378,6 +392,7 @@ CreateOrderRequest _$CreateOrderRequestFromJson(Map<String, dynamic> json) =>
       lat: (json['lat'] as num).toDouble(),
       lng: (json['lng'] as num).toDouble(),
       addressEncrypted: json['addressEncrypted'] as String,
+      postleitzahl: json['postleitzahl'] as String?,
       scheduledAt: json['scheduledAt'] as String?,
     );
 
@@ -389,6 +404,7 @@ Map<String, dynamic> _$CreateOrderRequestToJson(CreateOrderRequest instance) =>
       'lat': instance.lat,
       'lng': instance.lng,
       'addressEncrypted': instance.addressEncrypted,
+      if (instance.postleitzahl case final value?) 'postleitzahl': value,
       if (instance.scheduledAt case final value?) 'scheduledAt': value,
     };
 

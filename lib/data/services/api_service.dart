@@ -78,9 +78,21 @@ class ApiService {
       _dio.delete(ApiConstants.customerMe);
 
   // ── Craftsman ─────────────────────────────────────────────
+  /// GET /craftsmen/me – returns the logged-in craftsman's own profile.
+  Future<Response> getCraftsmanMe() =>
+      _dio.get(ApiConstants.craftsmanMe);
+
+  /// GET /craftsmen/me/orders – returns all assigned orders (enriched with
+  /// category details, postleitzahl and pre-signed media URLs).
+  Future<Response> getCraftsmanOrders() =>
+      _dio.get(ApiConstants.craftsmanOrders);
+
   Future<Response> getCraftsmanProfile(String id) =>
       _dio.get(ApiConstants.craftsmanById(id));
 
+  /// PATCH /craftsmen/me/availability
+  /// Body: { "isOnline": true }
+  /// Response: 200 + CraftsmanProfile
   Future<Response> updateAvailability(bool isOnline) =>
       _dio.patch(ApiConstants.craftsmanAvailability,
           data: {'isOnline': isOnline});
@@ -91,6 +103,26 @@ class ApiService {
 
   Future<Response> getWallet() =>
       _dio.get(ApiConstants.craftsmanWallet);
+
+  /// POST /craftsmen/{craftsmanId}/documents
+  /// multipart/form-data: type (String), file (binary), expiryDate (String, optional)
+  Future<Response> uploadDocument(
+    String craftsmanId, {
+    required String type,
+    required String filePath,
+    String? expiryDate,
+  }) async {
+    final formData = FormData.fromMap({
+      'type': type,
+      'file': await MultipartFile.fromFile(filePath),
+      if (expiryDate != null) 'expiryDate': expiryDate,
+    });
+    return _dio.post(
+      ApiConstants.craftsmanDocuments(craftsmanId),
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+  }
 
   /// GET /craftsmen/me/available-orders
   ///

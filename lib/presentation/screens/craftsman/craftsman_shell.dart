@@ -1,12 +1,66 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:handwerker_app/core/theme/app_theme.dart';
 import 'package:handwerker_app/core/navigation/app_router.dart';
+import 'package:handwerker_app/data/providers/app_providers.dart';
 
-class CraftsmanShell extends ConsumerWidget {
+class CraftsmanShell extends ConsumerStatefulWidget {
   final Widget child;
   const CraftsmanShell({super.key, required this.child});
+
+  @override
+  ConsumerState<CraftsmanShell> createState() => _CraftsmanShellState();
+}
+
+class _CraftsmanShellState extends ConsumerState<CraftsmanShell> {
+  StreamSubscription<Position>? _positionSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _startLocationTracking();
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _startLocationTracking() async {
+    // Check / request permission
+    LocationPermission perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
+      debugPrint('⚠️ [LOCATION] Permission denied – tracking disabled');
+      return;
+    }
+
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 50, // only fire when craftsman moved ≥ 50 m
+    );
+
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
+        .listen((pos) async {
+      try {
+        await ref
+            .read(apiServiceProvider)
+            .updateLocation(pos.latitude, pos.longitude);
+        debugPrint(
+            '📍 [LOCATION] Sent ${pos.latitude}, ${pos.longitude} to backend');
+      } catch (e) {
+        debugPrint('⚠️ [LOCATION] updateLocation failed: $e');
+      }
+    });
+  }
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -16,11 +70,11 @@ class CraftsmanShell extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final index = _currentIndex(context);
 
     return Scaffold(
-      body: child,
+      body: widget.child,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppTheme.surfaceDark,

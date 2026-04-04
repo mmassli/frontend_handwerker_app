@@ -373,19 +373,23 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
 
     // ── 3. Update customer profile ───────────────────────────
     {
-      final profileData = <String, dynamic>{
-        'lat': lat,
-        'lng': lng,
-      };
+      final profileData = <String, dynamic>{};
       final fn = _firstNameController.text.trim();
       final ln = _lastNameController.text.trim();
       final em = _emailController.text.trim();
       if (fn.isNotEmpty) profileData['firstName'] = fn;
       if (ln.isNotEmpty) profileData['lastName'] = ln;
       if (em.isNotEmpty) profileData['email'] = em;
-      if (_addressController.text.trim().isNotEmpty) {
-        profileData['addressEncrypted'] = encrypted;
-      }
+
+      // API expects address.latitude / address.longitude (AddressInput schema).
+      // Flat 'lat'/'lng' fields are unknown to the backend and would be ignored.
+      final addressText = _addressController.text.trim();
+      profileData['address'] = <String, dynamic>{
+        'latitude': lat,
+        'longitude': lng,
+        if (addressText.isNotEmpty) 'street': addressText,
+      };
+
       try {
         await ref.read(apiServiceProvider).updateCustomerProfile(profileData);
         ref.invalidate(customerProfileProvider);
@@ -395,6 +399,11 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
     }
 
     // ── 4. Build DTO ─────────────────────────────────────────
+    // Extract German postal code (5 digits) from the address text.
+    final addressText = _addressController.text.trim();
+    final plzMatch = RegExp(r'\b(\d{5})\b').firstMatch(addressText);
+    final postleitzahl = plzMatch?.group(1);
+
     final request = CreateOrderRequest(
       serviceCategoryId: _selectedCategory!.id!,
       requestType: _requestType,
@@ -404,6 +413,7 @@ class _CreateOrderScreenState extends ConsumerState<CreateOrderScreen>
       lat: lat,
       lng: lng,
       addressEncrypted: encrypted,
+      postleitzahl: postleitzahl,
       scheduledAt: _requestType == RequestType.scheduled &&
               _scheduledDate != null
           ? _scheduledDate!.toUtc().toIso8601String()

@@ -256,6 +256,18 @@ class _AdminCraftsmenPanelState extends ConsumerState<AdminCraftsmenPanel> {
     );
   }
 
+  void _openStatusSheet(BuildContext context, CraftsmanProfile craftsman) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _StatusManagementSheet(
+        craftsman: craftsman,
+        onUpdated: () => ref.invalidate(adminCraftsmenProvider),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final craftsmenAsync = ref.watch(adminCraftsmenProvider(_filterStatus));
@@ -362,7 +374,7 @@ class _AdminCraftsmenPanelState extends ConsumerState<AdminCraftsmenPanel> {
                       return SlideUpFadeIn(
                         delay: Duration(milliseconds: i * 60),
                         child: TapScale(
-                          onTap: () {},
+                          onTap: () => _openStatusSheet(context, craftsman),
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(14),
@@ -406,6 +418,12 @@ class _AdminCraftsmenPanelState extends ConsumerState<AdminCraftsmenPanel> {
                                   label: craftsman.status?.label ?? 'Unbekannt',
                                   color: craftsman.status?.color ?? AppTheme.slate400,
                                   showDot: false,
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: AppTheme.slate600,
+                                  size: 18,
                                 ),
                               ],
                             ),
@@ -1284,6 +1302,434 @@ class _AdminMenuItem extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// STATUS MANAGEMENT SHEET
+// ═══════════════════════════════════════════════════════════════
+
+class _StatusManagementSheet extends ConsumerStatefulWidget {
+  final CraftsmanProfile craftsman;
+  final VoidCallback? onUpdated;
+
+  const _StatusManagementSheet({
+    required this.craftsman,
+    this.onUpdated,
+  });
+
+  @override
+  ConsumerState<_StatusManagementSheet> createState() =>
+      _StatusManagementSheetState();
+}
+
+class _StatusManagementSheetState
+    extends ConsumerState<_StatusManagementSheet> {
+  CraftsmanStatus? _selectedStatus;
+  final _reasonCtrl = TextEditingController();
+  bool _confirmDeactivation = false;
+
+  @override
+  void dispose() {
+    _reasonCtrl.dispose();
+    super.dispose();
+  }
+
+  CraftsmanStatus get _currentStatus =>
+      widget.craftsman.status ?? CraftsmanStatus.pending;
+
+  Future<void> _submit() async {
+    if (_selectedStatus == null) return;
+
+    await ref.read(updateCraftsmanStatusProvider.notifier).update(
+          widget.craftsman.id!,
+          _selectedStatus!,
+          reason: _reasonCtrl.text.trim().isEmpty
+              ? null
+              : _reasonCtrl.text.trim(),
+        );
+
+    final state = ref.read(updateCraftsmanStatusProvider);
+    if (!mounted) return;
+
+    if (state.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_rounded, color: AppTheme.error, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  state.error!,
+                  style: const TextStyle(color: AppTheme.slate100),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.surfaceElevated,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } else {
+      Navigator.of(context).pop();
+      widget.onUpdated?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: AppTheme.success, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'Status auf „${_selectedStatus!.label}" geändert',
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.surfaceElevated,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final updateState = ref.watch(updateCraftsmanStatusProvider);
+    final transitions = _currentStatus.allowedTransitions;
+    final isTerminalCurrent = _currentStatus.isTerminal;
+    final isDeactivationSelected =
+        _selectedStatus == CraftsmanStatus.deactivated;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppTheme.surfaceDark,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        16,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 28,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.slate600,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Header
+            Row(
+              children: [
+                HWAvatar(name: widget.craftsman.displayName, size: 46),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.craftsman.displayName,
+                        style: const TextStyle(
+                          fontFamily: AppTheme.displayFont,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.slate100,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            _currentStatus.icon,
+                            size: 14,
+                            color: _currentStatus.color,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _currentStatus.label,
+                            style: TextStyle(
+                              fontFamily: AppTheme.bodyFont,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _currentStatus.color,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            // Terminal state notice
+            if (isTerminalCurrent) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppTheme.slate700,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppTheme.slate600),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lock_rounded,
+                        size: 18, color: AppTheme.slate400),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Dieser Account ist permanent deaktiviert. Keine weiteren Statusänderungen möglich.',
+                        style: TextStyle(
+                          fontFamily: AppTheme.bodyFont,
+                          fontSize: 13,
+                          color: AppTheme.slate400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              // Status selection label
+              const Text(
+                'Status ändern zu',
+                style: TextStyle(
+                  fontFamily: AppTheme.bodyFont,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.slate400,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Status chips
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: transitions.map((status) {
+                  final isSelected = _selectedStatus == status;
+                  final isDeactivate = status == CraftsmanStatus.deactivated;
+                  final chipColor =
+                      isDeactivate ? AppTheme.error : status.color;
+                  return GestureDetector(
+                    onTap: () => setState(() {
+                      _selectedStatus =
+                          isSelected ? null : status;
+                      if (_selectedStatus != CraftsmanStatus.deactivated) {
+                        _confirmDeactivation = false;
+                      }
+                    }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? chipColor.withOpacity(0.15)
+                            : AppTheme.slate800,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? chipColor : AppTheme.slate700,
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(status.icon,
+                              size: 16,
+                              color: isSelected
+                                  ? chipColor
+                                  : AppTheme.slate400),
+                          const SizedBox(width: 7),
+                          Text(
+                            status.label,
+                            style: TextStyle(
+                              fontFamily: AppTheme.bodyFont,
+                              fontSize: 14,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? chipColor
+                                  : AppTheme.slate300,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              if (_selectedStatus != null) ...[
+                const SizedBox(height: 20),
+
+                // Deactivation warning + confirmation
+                if (isDeactivationSelected) ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.error.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppTheme.error.withOpacity(0.25)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            size: 18, color: AppTheme.error),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'DEAKTIVIERT ist ein permanenter Zustand. Diese Aktion kann nicht rückgängig gemacht werden.',
+                            style: TextStyle(
+                              fontFamily: AppTheme.bodyFont,
+                              fontSize: 13,
+                              color: AppTheme.error,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => setState(
+                        () => _confirmDeactivation = !_confirmDeactivation),
+                    child: Row(
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: _confirmDeactivation
+                                ? AppTheme.error
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                              color: _confirmDeactivation
+                                  ? AppTheme.error
+                                  : AppTheme.slate600,
+                            ),
+                          ),
+                          child: _confirmDeactivation
+                              ? const Icon(Icons.check,
+                                  size: 14, color: Colors.white)
+                              : null,
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Ich bestätige, dass dieser Account permanent deaktiviert werden soll.',
+                            style: TextStyle(
+                              fontFamily: AppTheme.bodyFont,
+                              fontSize: 13,
+                              color: AppTheme.slate300,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Reason field
+                const Text(
+                  'Begründung (optional)',
+                  style: TextStyle(
+                    fontFamily: AppTheme.bodyFont,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.slate400,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _reasonCtrl,
+                  maxLines: 3,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.bodyFont,
+                    fontSize: 14,
+                    color: AppTheme.slate100,
+                  ),
+                  decoration: InputDecoration(
+                    hintText:
+                        'z. B. „Alle Dokumente geprüft und genehmigt"',
+                    hintStyle: const TextStyle(
+                      fontFamily: AppTheme.bodyFont,
+                      fontSize: 14,
+                      color: AppTheme.slate500,
+                    ),
+                    filled: true,
+                    fillColor: AppTheme.slate800,
+                    contentPadding: const EdgeInsets.all(14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide:
+                          const BorderSide(color: AppTheme.slate700),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide:
+                          const BorderSide(color: AppTheme.slate700),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: AppTheme.amber, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Submit button
+                HWButton(
+                  label: isDeactivationSelected
+                      ? 'Permanent deaktivieren'
+                      : 'Status auf „${_selectedStatus!.label}" setzen',
+                  icon: isDeactivationSelected
+                      ? Icons.cancel_rounded
+                      : _selectedStatus!.icon,
+                  isLoading: updateState.isLoading,
+                  onTap: (updateState.isLoading ||
+                          (isDeactivationSelected && !_confirmDeactivation))
+                      ? null
+                      : _submit,
+                ),
+              ],
+            ],
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CREATE CRAFTSMAN SHEET
 // ═══════════════════════════════════════════════════════════════
 
@@ -1331,7 +1777,7 @@ class _CreateCraftsmanSheetState extends ConsumerState<_CreateCraftsmanSheet> {
       firstName: _firstNameCtrl.text.trim(),
       lastName: _lastNameCtrl.text.trim(),
       email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      serviceCategoryIds:
+      categoryIds:
           _selectedCategoryIds.isEmpty ? null : _selectedCategoryIds.toList(),
       radiusKm: _radiusCtrl.text.trim().isEmpty
           ? null

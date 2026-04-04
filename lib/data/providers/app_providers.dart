@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:handwerker_app/core/utils/app_exception.dart';
@@ -355,27 +356,46 @@ final createOrderProvider =
 // CRAFTSMAN
 // ═══════════════════════════════════════════════════════════════
 
-final craftsmanWalletProvider =
-    FutureProvider<WalletBalance>((ref) async {
+/// Fetches the currently logged-in craftsman's own full profile.
+final craftsmanMeProvider = FutureProvider<CraftsmanProfile>((ref) async {
   final api = ref.watch(apiServiceProvider);
-  final response = await api.getWallet();
-  return WalletBalance.fromJson(response.data);
+  final response = await api.getCraftsmanMe();
+  return CraftsmanProfile.fromJson(response.data as Map<String, dynamic>);
+});
+
+/// Fetches the craftsman's own assigned orders with enriched category info,
+/// postleitzahl and pre-signed media URLs.
+/// Endpoint: GET /craftsmen/me/orders
+final craftsmanMyOrdersProvider =
+    FutureProvider.autoDispose<List<CraftsmanOrderView>>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  final response = await api.getCraftsmanOrders();
+  final raw = response.data;
+  final list = raw is List ? raw : (raw['data'] ?? raw['content'] ?? raw);
+  return (list as List)
+      .map((e) => CraftsmanOrderView.fromJson(e as Map<String, dynamic>))
+      .toList();
 });
 
 /// Fetches open orders (MATCHING / PROPOSALS_RECEIVED) that match this
 /// craftsman's service categories and geographic radius.
-///
-/// Pull-based complement to FCM push — discovers orders even when a push
-/// notification was missed.
+/// Endpoint: GET /craftsmen/me/available-orders  (enriched CraftsmanOrderView)
 final availableOrdersProvider =
-    FutureProvider.autoDispose<List<Order>>((ref) async {
+    FutureProvider.autoDispose<List<CraftsmanOrderView>>((ref) async {
   final api = ref.watch(apiServiceProvider);
   final response = await api.getAvailableOrders();
   final raw = response.data;
   final list = raw is List ? raw : (raw['data'] ?? raw['content'] ?? raw);
   return (list as List)
-      .map((e) => Order.fromJson(e as Map<String, dynamic>))
+      .map((e) => CraftsmanOrderView.fromJson(e as Map<String, dynamic>))
       .toList();
+});
+
+final craftsmanWalletProvider =
+    FutureProvider<WalletBalance>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  final response = await api.getWallet();
+  return WalletBalance.fromJson(response.data);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -545,5 +565,78 @@ class CreateCraftsmanNotifier extends StateNotifier<CreateCraftsmanState> {
 final createCraftsmanProvider = StateNotifierProvider.autoDispose<
     CreateCraftsmanNotifier, CreateCraftsmanState>(
   (ref) => CreateCraftsmanNotifier(ref.watch(apiServiceProvider)),
+);
+
+// ═══════════════════════════════════════════════════════════════
+// UPDATE CRAFTSMAN STATUS (Admin only)
+// ═══════════════════════════════════════════════════════════════
+
+class UpdateCraftsmanStatusState {
+  final bool isLoading;
+  final String? error;
+  final CraftsmanProfile? updated;
+
+  const UpdateCraftsmanStatusState({
+    this.isLoading = false,
+    this.error,
+    this.updated,
+  });
+
+  UpdateCraftsmanStatusState copyWith({
+    bool? isLoading,
+    String? error,
+    CraftsmanProfile? updated,
+    bool clearError = false,
+  }) =>
+      UpdateCraftsmanStatusState(
+        isLoading: isLoading ?? this.isLoading,
+        error: clearError ? null : (error ?? this.error),
+        updated: updated ?? this.updated,
+      );
+}
+
+class UpdateCraftsmanStatusNotifier
+    extends StateNotifier<UpdateCraftsmanStatusState> {
+  final ApiService _api;
+
+  UpdateCraftsmanStatusNotifier(this._api)
+      : super(const UpdateCraftsmanStatusState());
+
+  /// Calls PATCH /api/v1/craftsmen/{id}/status.
+  /// Throws the backend message on a 422 invalid-transition response.
+  Future<void> update(
+    String craftsmanId,
+    CraftsmanStatus newStatus, {
+    String? reason,
+  }) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _api.updateCraftsmanStatus(
+        craftsmanId,
+        newStatus.name.toUpperCase(),
+        reason: reason,
+      );
+      final data = response.data;
+      final profile = CraftsmanProfile.fromJson(
+        data is Map<String, dynamic> ? data : data as Map<String, dynamic>,
+      );
+      state = state.copyWith(isLoading: false, updated: profile);
+    } on DioException catch (e) {
+      final msg = (e.response?.data is Map)
+          ? (e.response!.data['message'] as String? ??
+              'Status konnte nicht geändert werden')
+          : 'Status konnte nicht geändert werden';
+      state = state.copyWith(isLoading: false, error: msg);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  void reset() => state = const UpdateCraftsmanStatusState();
+}
+
+final updateCraftsmanStatusProvider = StateNotifierProvider.autoDispose<
+    UpdateCraftsmanStatusNotifier, UpdateCraftsmanStatusState>(
+  (ref) => UpdateCraftsmanStatusNotifier(ref.watch(apiServiceProvider)),
 );
 

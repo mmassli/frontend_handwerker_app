@@ -251,4 +251,49 @@ extension CraftsmanStatusExt on CraftsmanStatus {
         return 'Deaktiviert';
     }
   }
+
+  IconData get icon {
+    switch (this) {
+      case CraftsmanStatus.pending:
+        return Icons.pending_actions_rounded;
+      case CraftsmanStatus.verified:
+        return Icons.verified_rounded;
+      case CraftsmanStatus.active:
+        return Icons.check_circle_rounded;
+      case CraftsmanStatus.inactive:
+        return Icons.pause_circle_rounded;
+      case CraftsmanStatus.suspended:
+        return Icons.block_rounded;
+      case CraftsmanStatus.deactivated:
+        return Icons.cancel_rounded;
+    }
+  }
+
+  /// Allowed target statuses per the state machine.
+  /// [CraftsmanStatus.deactivated] is terminal – returns [].
+  List<CraftsmanStatus> get allowedTransitions {
+    switch (this) {
+      case CraftsmanStatus.pending:
+        return [CraftsmanStatus.verified, CraftsmanStatus.deactivated];
+      case CraftsmanStatus.verified:
+      case CraftsmanStatus.active:
+        return [
+          CraftsmanStatus.inactive,
+          CraftsmanStatus.suspended,
+          CraftsmanStatus.deactivated,
+        ];
+      case CraftsmanStatus.inactive:
+        return [
+          CraftsmanStatus.verified,
+          CraftsmanStatus.suspended,
+          CraftsmanStatus.deactivated,
+        ];
+      case CraftsmanStatus.suspended:
+        return [CraftsmanStatus.verified, CraftsmanStatus.deactivated];
+      case CraftsmanStatus.deactivated:
+        return [];
+    }
+  }
+
+  bool get isTerminal => this == CraftsmanStatus.deactivated;
 }

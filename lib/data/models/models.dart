@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Icons, IconData;
 import 'package:json_annotation/json_annotation.dart';
 
 part 'models.g.dart';
@@ -150,6 +151,7 @@ enum CraftsmanStatus {
 @JsonSerializable()
 class CraftsmanProfile {
   final String? id;
+  final String? userId;
   final String? phone;
   final String? firstName;
   final String? lastName;
@@ -158,13 +160,17 @@ class CraftsmanProfile {
   final List<ServiceCategory>? serviceCategories;
   final double? radiusKm;
   final double? ratingAvg;
+  final int? ratingCount;
   final int? completedJobsCount;
   final Address? address;
   final double? walletBalance;
+  final double? lat;
+  final double? lng;
   final DateTime? createdAt;
 
   CraftsmanProfile({
     this.id,
+    this.userId,
     this.phone,
     this.firstName,
     this.lastName,
@@ -173,9 +179,12 @@ class CraftsmanProfile {
     this.serviceCategories,
     this.radiusKm,
     this.ratingAvg,
+    this.ratingCount,
     this.completedJobsCount,
     this.address,
     this.walletBalance,
+    this.lat,
+    this.lng,
     this.createdAt,
   });
 
@@ -236,7 +245,7 @@ class CreateCraftsmanRequest {
   final String firstName;
   final String lastName;
   final String? email;
-  final List<String>? serviceCategoryIds;
+  final List<String>? categoryIds;
   final double? radiusKm;
   final String? street;
   final String? city;
@@ -247,7 +256,7 @@ class CreateCraftsmanRequest {
     required this.firstName,
     required this.lastName,
     this.email,
-    this.serviceCategoryIds,
+    this.categoryIds,
     this.radiusKm,
     this.street,
     this.city,
@@ -261,8 +270,8 @@ class CreateCraftsmanRequest {
       'lastName': lastName,
     };
     if (email != null && email!.isNotEmpty) map['email'] = email;
-    if (serviceCategoryIds != null && serviceCategoryIds!.isNotEmpty) {
-      map['serviceCategoryIds'] = serviceCategoryIds;
+    if (categoryIds != null && categoryIds!.isNotEmpty) {
+      map['categoryIds'] = categoryIds;
     }
     if (radiusKm != null) map['radiusKm'] = radiusKm;
     if (street != null || city != null || postalCode != null) {
@@ -406,10 +415,15 @@ enum RequestType {
 @JsonSerializable()
 class Order {
   final String? id;
-  final String? orderNumber; // human-readable order number returned by backend
+  final String? orderNumber;
   final String? customerId;
   final String? assignedCraftsmanId;
   final ServiceCategory? serviceCategory;
+  // Extra flat fields returned by the enriched OrderResponse
+  final String? serviceCategorySlug;
+  final String? serviceCategoryNameDe;
+  /// Postal code stored directly on the order (added in V7 migration)
+  final String? postleitzahl;
   final RequestType? requestType;
   final OrderStatus? status;
   final String? description;
@@ -428,6 +442,9 @@ class Order {
     this.customerId,
     this.assignedCraftsmanId,
     this.serviceCategory,
+    this.serviceCategorySlug,
+    this.serviceCategoryNameDe,
+    this.postleitzahl,
     this.requestType,
     this.status,
     this.description,
@@ -550,8 +567,10 @@ class CreateOrderRequest {
   final double lng;
 
   /// AES-256-CBC encrypted address string
-  /// Format: base64(cipherText):base64(IV)
   final String addressEncrypted;
+
+  /// Postal code (5-digit German PLZ) extracted from the address input
+  final String? postleitzahl;
 
   /// ISO-8601 UTC string for scheduled orders; null for IMMEDIATE
   final String? scheduledAt;
@@ -563,12 +582,179 @@ class CreateOrderRequest {
     required this.lat,
     required this.lng,
     required this.addressEncrypted,
+    this.postleitzahl,
     this.scheduledAt,
   });
 
   factory CreateOrderRequest.fromJson(Map<String, dynamic> json) =>
       _$CreateOrderRequestFromJson(json);
   Map<String, dynamic> toJson() => _$CreateOrderRequestToJson(this);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CRAFTSMAN ORDER DTOs
+// Returned by GET /craftsmen/me/orders and /craftsmen/me/available-orders
+// ═══════════════════════════════════════════════════════════════
+
+/// Enriched media item with a resolvable URL (pre-signed S3 or direct path).
+class OrderMediaItem {
+  final String? id;
+
+  /// PHOTO | VIDEO | AUDIO
+  final String? type;
+
+  /// Directly loadable URL (pre-signed for S3, direct for local storage)
+  final String? url;
+
+  /// true = taken before the job, false = after
+  final bool? isBefore;
+  final DateTime? createdAt;
+
+  const OrderMediaItem({
+    this.id,
+    this.type,
+    this.url,
+    this.isBefore,
+    this.createdAt,
+  });
+
+  factory OrderMediaItem.fromJson(Map<String, dynamic> json) => OrderMediaItem(
+        id: json['id'] as String?,
+        type: json['type'] as String?,
+        url: json['url'] as String?,
+        isBefore: json['isBefore'] as bool?,
+        createdAt: json['createdAt'] == null
+            ? null
+            : DateTime.tryParse(json['createdAt'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': type,
+        'url': url,
+        'isBefore': isBefore,
+        'createdAt': createdAt?.toIso8601String(),
+      };
+
+  IconData get icon {
+    switch (type?.toUpperCase()) {
+      case 'VIDEO':
+        return Icons.videocam_rounded;
+      case 'AUDIO':
+        return Icons.mic_rounded;
+      default:
+        return Icons.image_rounded;
+    }
+  }
+}
+
+/// Full order view returned from the craftsman-specific endpoints.
+/// Contains enriched category info, PLZ, and pre-signed media URLs.
+class CraftsmanOrderView {
+  final String? id;
+  final String? orderNumber;
+  final OrderStatus? status;
+  final RequestType? requestType;
+  final String? serviceCategoryId;
+  final String? serviceCategorySlug;
+  final String? serviceCategoryNameDe;
+  final String? serviceCategoryNameEn;
+  final String? postleitzahl;
+  final String? city;
+  final String? description;
+  final List<OrderMediaItem> media;
+  final DateTime? createdAt;
+  final DateTime? scheduledAt;
+
+  const CraftsmanOrderView({
+    this.id,
+    this.orderNumber,
+    this.status,
+    this.requestType,
+    this.serviceCategoryId,
+    this.serviceCategorySlug,
+    this.serviceCategoryNameDe,
+    this.serviceCategoryNameEn,
+    this.postleitzahl,
+    this.city,
+    this.description,
+    this.media = const [],
+    this.createdAt,
+    this.scheduledAt,
+  });
+
+  factory CraftsmanOrderView.fromJson(Map<String, dynamic> json) {
+    // serviceCategory can be either a nested object or flat fields
+    String? catSlug = json['serviceCategorySlug'] as String?;
+    String? catNameDe = json['serviceCategoryNameDe'] as String?;
+    String? catNameEn = json['serviceCategoryNameEn'] as String?;
+    String? catId = json['serviceCategoryId'] as String?;
+    if (json['serviceCategory'] is Map) {
+      final cat = json['serviceCategory'] as Map<String, dynamic>;
+      catId ??= cat['id'] as String?;
+      catSlug ??= cat['slug'] as String?;
+      catNameDe ??= (cat['nameDe'] ?? cat['nameDE']) as String?;
+      catNameEn ??= (cat['nameEn'] ?? cat['nameEN']) as String?;
+    }
+
+    // location can be a nested object or flat city/postalCode fields
+    String? city = json['city'] as String?;
+    String? plz = json['postleitzahl'] as String?;
+    if (json['location'] is Map) {
+      final loc = json['location'] as Map<String, dynamic>;
+      city ??= loc['city'] as String?;
+      plz ??= (loc['postalCode'] ?? loc['postleitzahl']) as String?;
+    }
+
+    final rawMedia = json['media'] as List<dynamic>? ?? [];
+
+    return CraftsmanOrderView(
+      id: json['id'] as String?,
+      orderNumber: json['orderNumber'] as String?,
+      status: json['status'] == null
+          ? null
+          : $enumDecodeNullable(_$OrderStatusEnumMap, json['status']),
+      requestType: json['requestType'] == null
+          ? null
+          : $enumDecodeNullable(_$RequestTypeEnumMap, json['requestType']),
+      serviceCategoryId: catId,
+      serviceCategorySlug: catSlug,
+      serviceCategoryNameDe: catNameDe,
+      serviceCategoryNameEn: catNameEn,
+      postleitzahl: plz,
+      city: city,
+      description: json['description'] as String?,
+      media: rawMedia
+          .map((e) => OrderMediaItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      createdAt: json['createdAt'] == null
+          ? null
+          : DateTime.tryParse(json['createdAt'] as String),
+      scheduledAt: json['scheduledAt'] == null
+          ? null
+          : DateTime.tryParse(json['scheduledAt'] as String),
+    );
+  }
+
+  String get serviceName => serviceCategoryNameDe ?? serviceCategoryNameEn ?? 'Auftrag';
+  String get locationDisplay => [postleitzahl, city].whereType<String>().join(' ');
+  bool get isImmediate => requestType == RequestType.immediate;
+
+  String get statusLabel {
+    switch (status) {
+      case OrderStatus.requestCreated: return 'Anfrage erstellt';
+      case OrderStatus.matching: return 'Suche Handwerker...';
+      case OrderStatus.proposalsReceived: return 'Angebote eingegangen';
+      case OrderStatus.craftsmanAssigned: return 'Handwerker zugewiesen';
+      case OrderStatus.craftsmanOnTheWay: return 'Handwerker unterwegs';
+      case OrderStatus.craftsmanArrived: return 'Handwerker eingetroffen';
+      case OrderStatus.jobInProgress: return 'Arbeit läuft';
+      case OrderStatus.jobCompleted: return 'Arbeit abgeschlossen';
+      case OrderStatus.orderClosed: return 'Abgeschlossen';
+      case OrderStatus.cancelled: return 'Storniert';
+      default: return 'Offen';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

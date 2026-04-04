@@ -232,9 +232,18 @@ class HomeScreen extends ConsumerWidget {
                           return SlideUpFadeIn(
                             delay: Duration(milliseconds: i * 80),
                             child: TapScale(
-                              onTap: () => context.push(
-                                '${AppRoutes.orderDetail}/${order.id}',
-                              ),
+                              onTap: () {
+                                if (order.status ==
+                                    OrderStatus.proposalsReceived) {
+                                  context.push(
+                                    '${AppRoutes.proposals}/${order.id}',
+                                  );
+                                } else {
+                                  context.push(
+                                    '${AppRoutes.orderDetail}/${order.id}',
+                                  );
+                                }
+                              },
                               child: Container(
                                 width: 260,
                                 margin: const EdgeInsets.only(right: 12),

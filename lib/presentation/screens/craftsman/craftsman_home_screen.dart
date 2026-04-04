@@ -73,9 +73,23 @@ class _CraftsmanHomeScreenState extends ConsumerState<CraftsmanHomeScreen> {
                     child: TapScale(
                       onTap: () async {
                         setState(() => _isOnline = !_isOnline);
-                        await ref
-                            .read(apiServiceProvider)
-                            .updateAvailability(_isOnline);
+                        try {
+                          final response = await ref
+                              .read(apiServiceProvider)
+                              .updateAvailability(_isOnline);
+                          // PATCH /me/availability now returns 200 + CraftsmanProfile
+                          // → sync toggle with the server-side status
+                          final data = response.data;
+                          if (data is Map<String, dynamic>) {
+                            final profile = CraftsmanProfile.fromJson(data);
+                            if (mounted) {
+                              setState(() => _isOnline = profile.isOnline);
+                            }
+                          }
+                        } catch (_) {
+                          // Revert optimistic toggle on error
+                          if (mounted) setState(() => _isOnline = !_isOnline);
+                        }
                       },
                       child: AnimatedContainer(
                         duration: HWAnimations.normal,
@@ -519,9 +533,7 @@ class _CraftsmanHomeScreenState extends ConsumerState<CraftsmanHomeScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        order.serviceCategory
-                                                ?.nameDE ??
-                                            'Auftrag',
+                                        order.serviceName,
                                         style: const TextStyle(
                                           fontFamily:
                                               AppTheme.displayFont,
@@ -533,8 +545,7 @@ class _CraftsmanHomeScreenState extends ConsumerState<CraftsmanHomeScreen> {
                                       const SizedBox(height: 4),
                                       Row(
                                         children: [
-                                          if (order.requestType ==
-                                              RequestType.immediate)
+                                          if (order.isImmediate)
                                             Container(
                                               margin:
                                                   const EdgeInsets.only(
@@ -563,19 +574,46 @@ class _CraftsmanHomeScreenState extends ConsumerState<CraftsmanHomeScreen> {
                                                 ),
                                               ),
                                             ),
-                                          Text(
-                                            order.location?.city ??
-                                                order.location
-                                                    ?.postalCode ??
-                                                '',
-                                            style: const TextStyle(
-                                              fontFamily: AppTheme.bodyFont,
-                                              fontSize: 12,
-                                              color: AppTheme.slate400,
+                                          if (order.locationDisplay.isNotEmpty)
+                                            Row(
+                                              children: [
+                                                const Icon(
+                                                    Icons.location_on_outlined,
+                                                    size: 12,
+                                                    color: AppTheme.slate400),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  order.locationDisplay,
+                                                  style: const TextStyle(
+                                                    fontFamily: AppTheme.bodyFont,
+                                                    fontSize: 12,
+                                                    color: AppTheme.slate400,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ),
                                         ],
                                       ),
+                                      if (order.media.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.attach_file_rounded,
+                                                  size: 12,
+                                                  color: AppTheme.slate500),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                '${order.media.length} Medien',
+                                                style: const TextStyle(
+                                                  fontFamily: AppTheme.bodyFont,
+                                                  fontSize: 11,
+                                                  color: AppTheme.slate500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

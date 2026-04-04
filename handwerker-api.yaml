@@ -1221,6 +1221,26 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /craftsmen/me:
+    get:
+      tags: [Craftsmen]
+      summary: Get own craftsman profile (authenticated craftsman)
+      operationId: getOwnCraftsmanProfile
+      # NOTE: This endpoint MUST be defined before /craftsmen/{craftsmanId} in the
+      # controller so Spring matches the literal path "/me" first and does NOT try
+      # to parse "me" as a UUID (which would cause a 500 IllegalArgumentException).
+      responses:
+        '200':
+          description: Own craftsman profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CraftsmanProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /craftsmen/{craftsmanId}:
     get:
       tags: [Craftsmen]

@@ -107,6 +107,13 @@ class OrderDetailScreen extends ConsumerWidget {
                           ? 'Sofort'
                           : 'Geplant',
                     ),
+                    // Show postleitzahl if available, fallback to city
+                    if (order.postleitzahl != null)
+                      _InfoItem(
+                        icon: Icons.markunread_mailbox_outlined,
+                        label: 'PLZ',
+                        value: order.postleitzahl!,
+                      ),
                     _InfoItem(
                       icon: Icons.location_on_outlined,
                       label: 'Ort',
@@ -217,6 +224,50 @@ class OrderDetailScreen extends ConsumerWidget {
               ],
 
               const SizedBox(height: 32),
+
+              // Action: View proposals when proposals have been received
+              if (order.status == OrderStatus.proposalsReceived)
+                SlideUpFadeIn(
+                  delay: const Duration(milliseconds: 400),
+                  child: Column(
+                    children: [
+                      TapScale(
+                        onTap: () => context.push(
+                            '${AppRoutes.proposals}/${order.id}'),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.amber,
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusMD),
+                            boxShadow: AppTheme.glowAmber,
+                          ),
+                          child: const Center(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.local_offer_rounded,
+                                    color: AppTheme.slate900, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Angebote ansehen',
+                                  style: TextStyle(
+                                    fontFamily: AppTheme.displayFont,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.slate900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
 
               // Action: Go to tracking if active
               if (order.isActive && order.isInProgress)
