@@ -22,10 +22,14 @@ void main() {
   CreateOrderRequest makeRequest() => const CreateOrderRequest(
         serviceCategoryId: '550e8400-e29b-41d4-a716-446655440000',
         requestType: RequestType.immediate,
-        descriptionText: 'Wasserschaden',
-        lat: 32.0853,
-        lng: 34.7818,
-        addressEncrypted: 'ENCRYPTED_ADDR',
+        description: 'Wasserschaden',
+        location: AddressInput(
+          street: 'Musterstr. 1',
+          city: 'Berlin',
+          postalCode: '10115',
+          latitude: 32.0853,
+          longitude: 34.7818,
+        ),
       );
 
   setUp(() {

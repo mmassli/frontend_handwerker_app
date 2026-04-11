@@ -65,7 +65,14 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
                 ? null
                 : _commentController.text,
           );
-      if (mounted) context.pop();
+      // Refresh the "my proposal" provider so the UI immediately switches
+      // from the form to the submitted-proposal view.
+      // Also invalidate availableOrdersProvider so the list refreshes with
+      // the updated myProposal field on the next visit.
+      if (mounted) {
+        ref.invalidate(myProposalForOrderProvider(widget.orderId));
+        ref.invalidate(availableOrdersProvider);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -110,6 +117,7 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
+    final myProposalAsync = ref.watch(myProposalForOrderProvider(widget.orderId));
 
     return Scaffold(
       backgroundColor: AppTheme.slate900,
@@ -122,7 +130,24 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
         title: const Text('Auftragsanfrage'),
       ),
       body: orderAsync.when(
-        data: (order) => SingleChildScrollView(
+        data: (order) => myProposalAsync.when(
+          data: (myProposal) => myProposal != null
+              ? _SubmittedProposalView(order: order, proposal: myProposal, openMedia: _openMedia)
+              : _buildForm(order),
+          loading: () => const Center(child: CircularProgressIndicator(color: AppTheme.amber)),
+          error: (_, __) => _buildForm(order),
+        ),
+        loading: () =>
+            const Center(child: CircularProgressIndicator(color: AppTheme.amber)),
+        error: (e, _) => Center(
+          child: Text('$e', style: const TextStyle(color: AppTheme.error)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForm(Order order) {
+    return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -532,14 +557,367 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
               const SizedBox(height: 32),
             ],
           ),
-        ),
-        loading: () =>
-            const Center(child: CircularProgressIndicator(color: AppTheme.amber)),
-        error: (e, _) => Center(
-          child: Text('$e', style: const TextStyle(color: AppTheme.error)),
-        ),
+        );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Submitted-Proposal View (read-only)
+// Shown when the craftsman has already submitted a proposal for this order.
+// ─────────────────────────────────────────────────────────────
+class _SubmittedProposalView extends StatelessWidget {
+  final Order order;
+  final Proposal proposal;
+  final void Function(BuildContext, OrderMedia) openMedia;
+
+  const _SubmittedProposalView({
+    required this.order,
+    required this.proposal,
+    required this.openMedia,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _proposalStatusColor(proposal.status);
+    final statusLabel = _proposalStatusLabel(proposal.status);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Already-submitted banner ──────────────────────
+          SlideUpFadeIn(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.success.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                border: Border.all(color: AppTheme.success.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: AppTheme.success, size: 22),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Angebot bereits abgesendet',
+                      style: TextStyle(
+                        fontFamily: AppTheme.bodyFont,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontFamily: AppTheme.bodyFont,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Order info card ───────────────────────────────
+          SlideUpFadeIn(
+            delay: const Duration(milliseconds: 60),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.slate800,
+                borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                border: Border.all(color: AppTheme.slate700),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: order.requestType == RequestType.immediate
+                              ? AppTheme.error.withValues(alpha: 0.12)
+                              : AppTheme.info.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          order.requestType == RequestType.immediate
+                              ? '⚡ SOFORT'
+                              : '📅 GEPLANT',
+                          style: TextStyle(
+                            fontFamily: AppTheme.bodyFont,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: order.requestType == RequestType.immediate
+                                ? AppTheme.error
+                                : AppTheme.info,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      if ((order.postleitzahl ?? order.location?.postalCode) != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on_outlined,
+                                size: 13, color: AppTheme.slate400),
+                            const SizedBox(width: 3),
+                            Text(
+                              order.postleitzahl ?? order.location!.postalCode!,
+                              style: const TextStyle(
+                                fontFamily: AppTheme.bodyFont,
+                                fontSize: 13,
+                                color: AppTheme.slate400,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    order.serviceCategory?.nameDE ??
+                        order.serviceCategoryNameDe ??
+                        order.serviceCategory?.nameEN ??
+                        'Unbekannte Kategorie',
+                    style: const TextStyle(
+                      fontFamily: AppTheme.displayFont,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.slate100,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  if (order.description?.trim().isNotEmpty ?? false) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      order.description!,
+                      style: const TextStyle(
+                        fontFamily: AppTheme.bodyFont,
+                        fontSize: 13,
+                        color: AppTheme.slate400,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Your submitted proposal ───────────────────────
+          SlideUpFadeIn(
+            delay: const Duration(milliseconds: 120),
+            child: const Text(
+              'MEIN ANGEBOT',
+              style: TextStyle(
+                fontFamily: AppTheme.bodyFont,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.slate500,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          SlideUpFadeIn(
+            delay: const Duration(milliseconds: 180),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppTheme.slate800,
+                borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                border: Border.all(color: AppTheme.amber.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Price row
+                  Row(
+                    children: [
+                      const Icon(Icons.euro_rounded,
+                          color: AppTheme.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        proposal.priceFormatted,
+                        style: const TextStyle(
+                          fontFamily: AppTheme.displayFont,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.amber,
+                          letterSpacing: -1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // ETA row
+                  Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded,
+                          color: AppTheme.slate400, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Ankunft in ${proposal.etaFormatted}',
+                        style: const TextStyle(
+                          fontFamily: AppTheme.bodyFont,
+                          fontSize: 14,
+                          color: AppTheme.slate300,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Comment
+                  if (proposal.comment?.trim().isNotEmpty ?? false) ...[
+                    const SizedBox(height: 14),
+                    const Divider(color: AppTheme.slate700),
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.chat_bubble_outline_rounded,
+                            color: AppTheme.slate500, size: 15),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            proposal.comment!,
+                            style: const TextStyle(
+                              fontFamily: AppTheme.bodyFont,
+                              fontSize: 13,
+                              color: AppTheme.slate400,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (proposal.createdAt != null) ...[
+                    const SizedBox(height: 14),
+                    const Divider(color: AppTheme.slate700),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time_rounded,
+                            color: AppTheme.slate600, size: 13),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Gesendet: ${_formatDateTime(proposal.createdAt!)}',
+                          style: const TextStyle(
+                            fontFamily: AppTheme.bodyFont,
+                            fontSize: 12,
+                            color: AppTheme.slate500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── Back button ───────────────────────────────────
+          SlideUpFadeIn(
+            delay: const Duration(milliseconds: 240),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => context.pop(),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: const BorderSide(color: AppTheme.slate600),
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.radiusMD),
+                  ),
+                ),
+                child: const Text(
+                  'Zurück',
+                  style: TextStyle(
+                    fontFamily: AppTheme.displayFont,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.slate300,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
       ),
     );
+  }
+
+  Color _proposalStatusColor(ProposalStatus? status) {
+    switch (status) {
+      case ProposalStatus.pending:
+        return AppTheme.amber;
+      case ProposalStatus.accepted:
+        return AppTheme.success;
+      case ProposalStatus.rejected:
+        return AppTheme.error;
+      case ProposalStatus.expired:
+      case ProposalStatus.cancelled:
+        return AppTheme.slate400;
+      default:
+        return AppTheme.slate400;
+    }
+  }
+
+  String _proposalStatusLabel(ProposalStatus? status) {
+    switch (status) {
+      case ProposalStatus.pending:
+        return 'AUSSTEHEND';
+      case ProposalStatus.accepted:
+        return 'ANGENOMMEN';
+      case ProposalStatus.rejected:
+        return 'ABGELEHNT';
+      case ProposalStatus.expired:
+        return 'ABGELAUFEN';
+      case ProposalStatus.cancelled:
+        return 'ABGEBROCHEN';
+      default:
+        return 'UNBEKANNT';
+    }
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    final hour = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '$day.$month.$year $hour:$min Uhr';
   }
 }
 

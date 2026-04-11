@@ -112,10 +112,14 @@ void main() {
     final validRequest = CreateOrderRequest(
       serviceCategoryId: '550e8400-e29b-41d4-a716-446655440000',
       requestType: RequestType.immediate,
-      descriptionText: 'Wasserrohr gebrochen',
-      lat: 32.0853,
-      lng: 34.7818,
-      addressEncrypted: 'ENCRYPTED_TEST_VALUE',
+      description: 'Wasserrohr gebrochen',
+      location: AddressInput(
+        street: 'Musterstr. 1',
+        city: 'Berlin',
+        postalCode: '10115',
+        latitude: 32.0853,
+        longitude: 34.7818,
+      ),
       scheduledAt: null,
     );
 
@@ -160,10 +164,14 @@ void main() {
       expect(captured['serviceCategoryId'],
           '550e8400-e29b-41d4-a716-446655440000');
       expect(captured['requestType'], 'IMMEDIATE');
-      expect(captured['descriptionText'], 'Wasserrohr gebrochen');
-      expect(captured['lat'], 32.0853);
-      expect(captured['lng'], 34.7818);
-      expect(captured['addressEncrypted'], 'ENCRYPTED_TEST_VALUE');
+      expect(captured['description'], 'Wasserrohr gebrochen');
+      final loc = captured['location'] as Map<String, dynamic>;
+      expect(loc['street'], 'Musterstr. 1');
+      expect(loc['city'], 'Berlin');
+      expect(loc['postalCode'], '10115');
+      expect(loc['latitude'], 32.0853);
+      expect(loc['longitude'], 34.7818);
+      expect(loc['country'], 'DE');
       expect(captured['scheduledAt'], isNull);
     });
 
@@ -264,13 +272,17 @@ void main() {
       expect(ve.errors['lat'], 'Must be between -90 and 90');
     });
 
-    test('throws ValidationException when lat is NaN', () async {
+    test('throws ValidationException when latitude is NaN', () async {
       final badRequest = CreateOrderRequest(
         serviceCategoryId: 'uuid',
         requestType: RequestType.immediate,
-        lat: double.nan,
-        lng: 34.7818,
-        addressEncrypted: 'enc',
+        location: AddressInput(
+          street: 'Test',
+          city: 'Berlin',
+          postalCode: '10115',
+          latitude: double.nan,
+          longitude: 34.7818,
+        ),
       );
 
       expect(
@@ -285,9 +297,13 @@ void main() {
       final scheduledNoDate = CreateOrderRequest(
         serviceCategoryId: 'uuid',
         requestType: RequestType.scheduled,
-        lat: 32.0,
-        lng: 34.7,
-        addressEncrypted: 'enc',
+        location: AddressInput(
+          street: 'Test',
+          city: 'Berlin',
+          postalCode: '10115',
+          latitude: 32.0,
+          longitude: 34.7,
+        ),
         scheduledAt: null,
       );
 

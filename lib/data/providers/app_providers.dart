@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,6 +7,7 @@ import 'package:handwerker_app/core/utils/app_exception.dart';
 import 'package:handwerker_app/data/models/models.dart';
 import 'package:handwerker_app/data/repositories/order_repository.dart';
 import 'package:handwerker_app/data/services/api_service.dart';
+import 'package:handwerker_app/data/services/geocoding_service.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // SERVICE PROVIDERS
@@ -13,6 +16,8 @@ import 'package:handwerker_app/data/services/api_service.dart';
 final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
 final secureStorageProvider =
     Provider<FlutterSecureStorage>((ref) => const FlutterSecureStorage());
+final geocodingServiceProvider =
+    Provider<GeocodingService>((ref) => GeocodingService());
 
 // ═══════════════════════════════════════════════════════════════
 // AUTH STATE
@@ -164,6 +169,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } finally {
       await _storage.deleteAll();
       state = const AuthState(status: AuthStatus.unauthenticated);
+      // customerProfileProvider watches authProvider and will automatically
+      // invalidate itself when auth state changes to unauthenticated.
     }
   }
 
@@ -186,6 +193,11 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
 
 final customerProfileProvider =
     FutureProvider<CustomerProfile>((ref) async {
+  // Watch auth state so the provider automatically re-fetches when the
+  // logged-in user changes (login / logout / account switch).  Without this
+  // the Riverpod cache serves the previous user's profile to the next user
+  // because the provider is never invalidated on auth transitions.
+  ref.watch(authProvider);
   final api = ref.watch(apiServiceProvider);
   final response = await api.getCustomerProfile();
   return CustomerProfile.fromJson(response.data);
@@ -293,6 +305,54 @@ final proposalsProvider =
       .toList();
 });
 
+/// Returns the current craftsman's own proposal for a specific order,
+/// or null if no proposal has been submitted yet.
+///
+/// Primary source: `availableOrdersProvider` – the backend already embeds
+/// `myProposal` (null or Proposal object) in every available-order item, so
+/// no extra network round-trip is needed in the common case.
+///
+/// Fallback: if the order is not found in the available-orders cache (e.g.
+/// the user navigated directly via deep-link), we fall back to querying all
+/// proposals for the order and filtering for the current craftsman.
+final myProposalForOrderProvider =
+    FutureProvider.autoDispose.family<Proposal?, String>((ref, orderId) async {
+  // ── 1. Primary: use myProposal embedded in available-orders list ─────────
+  final availableAsync = ref.watch(availableOrdersProvider);
+  final availableList = availableAsync.asData?.value;
+  if (availableList != null) {
+    final match = availableList.cast<CraftsmanOrderView?>().firstWhere(
+          (o) => o?.id == orderId,
+          orElse: () => null,
+        );
+    if (match != null) {
+      // Backend guarantees: null = no proposal yet, object = already submitted
+      return match.myProposal;
+    }
+  }
+
+  // ── 2. Fallback: fetch proposals list and filter by craftsman id ─────────
+  final craftsman = await ref.watch(craftsmanMeProvider.future);
+  final myId = craftsman.id;
+  if (myId == null) return null;
+
+  final api = ref.watch(apiServiceProvider);
+  try {
+    final response = await api.listProposals(orderId);
+    final raw = response.data;
+    final list = raw is List ? raw : (raw['data'] ?? raw['content'] ?? raw);
+    final proposals = (list as List)
+        .map((e) => Proposal.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return proposals.cast<Proposal?>().firstWhere(
+          (p) => p?.craftsman?.id == myId,
+          orElse: () => null,
+        );
+  } catch (_) {
+    return null;
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════
 // CREATE ORDER FLOW
 // ═══════════════════════════════════════════════════════════════
@@ -357,11 +417,213 @@ final createOrderProvider =
 );
 
 // ═══════════════════════════════════════════════════════════════
+// ORDER FLOW STATE  (multi-step create-order wizard)
+// ═══════════════════════════════════════════════════════════════
+
+/// Geocoding progress for the address field in the Zusammenfassung step.
+enum GeocodingStatus { idle, loading, success, error }
+
+class OrderFlowState {
+  final ServiceCategory? category;
+  final RequestType requestType;
+  final DateTime? scheduledDate;
+  final String description;
+  final String addressText;
+  final double? lat;
+  final double? lng;
+  final String? postleitzahl;
+  final String? street;
+  final String? city;
+  final GeocodingStatus geocodingStatus;
+  final String? geocodingError;
+
+  const OrderFlowState({
+    this.category,
+    this.requestType = RequestType.immediate,
+    this.scheduledDate,
+    this.description = '',
+    this.addressText = '',
+    this.lat,
+    this.lng,
+    this.postleitzahl,
+    this.street,
+    this.city,
+    this.geocodingStatus = GeocodingStatus.idle,
+    this.geocodingError,
+  });
+
+  /// Only allow submission when geocoding has produced a valid coordinate pair
+  /// AND the address text is non-empty.
+  bool get canSubmit =>
+      lat != null &&
+      lng != null &&
+      addressText.trim().isNotEmpty &&
+      geocodingStatus == GeocodingStatus.success;
+
+  OrderFlowState copyWith({
+    ServiceCategory? category,
+    RequestType? requestType,
+    DateTime? scheduledDate,
+    bool clearScheduledDate = false,
+    String? description,
+    String? addressText,
+    double? lat,
+    bool clearLat = false,
+    double? lng,
+    bool clearLng = false,
+    String? postleitzahl,
+    bool clearPostleitzahl = false,
+    String? street,
+    bool clearStreet = false,
+    String? city,
+    bool clearCity = false,
+    GeocodingStatus? geocodingStatus,
+    String? geocodingError,
+    bool clearGeocodingError = false,
+  }) =>
+      OrderFlowState(
+        category: category ?? this.category,
+        requestType: requestType ?? this.requestType,
+        scheduledDate:
+            clearScheduledDate ? null : (scheduledDate ?? this.scheduledDate),
+        description: description ?? this.description,
+        addressText: addressText ?? this.addressText,
+        lat: clearLat ? null : (lat ?? this.lat),
+        lng: clearLng ? null : (lng ?? this.lng),
+        postleitzahl: clearPostleitzahl
+            ? null
+            : (postleitzahl ?? this.postleitzahl),
+        street: clearStreet ? null : (street ?? this.street),
+        city: clearCity ? null : (city ?? this.city),
+        geocodingStatus: geocodingStatus ?? this.geocodingStatus,
+        geocodingError: clearGeocodingError
+            ? null
+            : (geocodingError ?? this.geocodingError),
+      );
+}
+
+class OrderFlowNotifier extends StateNotifier<OrderFlowState> {
+  final GeocodingService _geocodingService;
+  Timer? _debounceTimer;
+
+  OrderFlowNotifier(this._geocodingService) : super(const OrderFlowState());
+
+  void setCategory(ServiceCategory cat) =>
+      state = state.copyWith(category: cat);
+
+  void setRequestType(RequestType t) =>
+      state = state.copyWith(requestType: t);
+
+  void setScheduledDate(DateTime? d) => d == null
+      ? state = state.copyWith(clearScheduledDate: true)
+      : state = state.copyWith(scheduledDate: d);
+
+  void setDescription(String desc) =>
+      state = state.copyWith(description: desc);
+
+  /// Called on every keystroke — debounces 800 ms before geocoding.
+  void setAddressText(String text) {
+    _debounceTimer?.cancel();
+    if (text.trim().isEmpty) {
+      state = OrderFlowState(
+        category: state.category,
+        requestType: state.requestType,
+        scheduledDate: state.scheduledDate,
+        description: state.description,
+        addressText: text,
+        geocodingStatus: GeocodingStatus.idle,
+      );
+      return;
+    }
+    state = state.copyWith(
+      addressText: text,
+      geocodingStatus: GeocodingStatus.loading,
+      clearLat: true,
+      clearLng: true,
+      clearPostleitzahl: true,
+      clearStreet: true,
+      clearCity: true,
+      clearGeocodingError: true,
+    );
+    _debounceTimer = Timer(
+      const Duration(milliseconds: 800),
+      () => _geocode(text),
+    );
+  }
+
+  /// Geocodes immediately without debounce (used when step becomes visible).
+  Future<void> geocodeImmediate(String text) async {
+    _debounceTimer?.cancel();
+    await _geocode(text);
+  }
+
+  Future<void> _geocode(String text) async {
+    if (text.trim().isEmpty) return;
+    state = state.copyWith(geocodingStatus: GeocodingStatus.loading);
+    try {
+      final result = await _geocodingService.geocode(text);
+      if (!mounted) return;
+      if (result != null) {
+        state = state.copyWith(
+          lat: result.lat,
+          lng: result.lng,
+          postleitzahl: result.postleitzahl,
+          street: result.street,
+          city: result.city,
+          geocodingStatus: GeocodingStatus.success,
+          clearGeocodingError: true,
+        );
+      } else {
+        state = state.copyWith(
+          clearLat: true,
+          clearLng: true,
+          clearPostleitzahl: true,
+          clearStreet: true,
+          clearCity: true,
+          geocodingStatus: GeocodingStatus.error,
+          geocodingError: 'Adresse nicht gefunden – bitte prüfen',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      state = state.copyWith(
+        clearLat: true,
+        clearLng: true,
+        clearPostleitzahl: true,
+        clearStreet: true,
+        clearCity: true,
+        geocodingStatus: GeocodingStatus.error,
+        geocodingError: 'Adresse nicht gefunden – bitte prüfen',
+      );
+    }
+  }
+
+  void reset() {
+    _debounceTimer?.cancel();
+    state = const OrderFlowState();
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+}
+
+/// autoDispose so the wizard state is wiped when the create-order screen exits.
+final orderFlowProvider =
+    StateNotifierProvider.autoDispose<OrderFlowNotifier, OrderFlowState>(
+  (ref) => OrderFlowNotifier(ref.watch(geocodingServiceProvider)),
+);
+
+// ═══════════════════════════════════════════════════════════════
 // CRAFTSMAN
 // ═══════════════════════════════════════════════════════════════
 
 /// Fetches the currently logged-in craftsman's own full profile.
 final craftsmanMeProvider = FutureProvider<CraftsmanProfile>((ref) async {
+  // Watch auth state so this provider re-fetches on login/logout/account switch.
+  ref.watch(authProvider);
   final api = ref.watch(apiServiceProvider);
   final response = await api.getCraftsmanMe();
   return CraftsmanProfile.fromJson(response.data as Map<String, dynamic>);
@@ -397,6 +659,8 @@ final availableOrdersProvider =
 
 final craftsmanWalletProvider =
     FutureProvider<WalletBalance>((ref) async {
+  // Watch auth state so this provider re-fetches on login/logout/account switch.
+  ref.watch(authProvider);
   final api = ref.watch(apiServiceProvider);
   final response = await api.getWallet();
   return WalletBalance.fromJson(response.data);
@@ -408,6 +672,8 @@ final craftsmanWalletProvider =
 
 final notificationsProvider =
     FutureProvider<List<AppNotification>>((ref) async {
+  // Watch auth state so this provider re-fetches on login/logout/account switch.
+  ref.watch(authProvider);
   try {
     final api = ref.watch(apiServiceProvider);
     final response = await api.listNotifications();

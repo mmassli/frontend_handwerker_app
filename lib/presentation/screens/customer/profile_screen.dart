@@ -308,6 +308,11 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
       TextEditingController(text: widget.profile.lastName ?? '');
   late final _emailCtrl =
       TextEditingController(text: widget.profile.email ?? '');
+  late final _addressTextCtrl = TextEditingController(
+    text: widget.profile.addressText ??
+        widget.profile.address?.displayFull ??
+        '',
+  );
   bool _isSaving = false;
 
   @override
@@ -315,6 +320,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     _firstNameCtrl.dispose();
     _lastNameCtrl.dispose();
     _emailCtrl.dispose();
+    _addressTextCtrl.dispose();
     super.dispose();
   }
 
@@ -322,6 +328,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     final fn = _firstNameCtrl.text.trim();
     final ln = _lastNameCtrl.text.trim();
     final em = _emailCtrl.text.trim();
+    final at = _addressTextCtrl.text.trim();
 
     setState(() => _isSaving = true);
     try {
@@ -329,6 +336,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
         if (fn.isNotEmpty) 'firstName': fn,
         if (ln.isNotEmpty) 'lastName': ln,
         if (em.isNotEmpty) 'email': em,
+        if (at.isNotEmpty) 'addressText': at,
       });
       ref.invalidate(customerProfileProvider);
       if (mounted) Navigator.pop(context);
@@ -391,6 +399,21 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
             ctrl: _emailCtrl,
             label: 'E-Mail',
             keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 12),
+          // Address text (free-text, no geocoding here)
+          _Field(
+            ctrl: _addressTextCtrl,
+            label: 'Heimatadresse (z.B. Musterstr. 1, 60435 Frankfurt)',
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Wird beim Auftrag erstellen vorausgefüllt.',
+            style: TextStyle(
+              fontFamily: AppTheme.bodyFont,
+              fontSize: 11,
+              color: AppTheme.slate500,
+            ),
           ),
           const SizedBox(height: 24),
           // Save button

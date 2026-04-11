@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:handwerker_app/data/models/models.dart';
 import 'package:handwerker_app/data/providers/app_providers.dart';
 import 'package:handwerker_app/presentation/screens/auth/login_screen.dart';
 import 'package:handwerker_app/presentation/screens/auth/otp_screen.dart';
@@ -181,7 +182,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.createOrder,
         pageBuilder: (ctx, state) => CustomTransitionPage(
-          child: const CreateOrderScreen(),
+          child: CreateOrderScreen(
+            preselectedCategory: state.extra as ServiceCategory?,
+          ),
           transitionsBuilder: _slideUpTransition,
         ),
       ),

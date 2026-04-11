@@ -34,7 +34,24 @@ class _ProposalsScreenState extends ConsumerState<ProposalsScreen> {
     super.dispose();
   }
 
+  bool _isProposalExpired(Proposal proposal) {
+    if (proposal.status == ProposalStatus.expired) return true;
+    if (proposal.expiresAt != null &&
+        proposal.expiresAt!.isBefore(DateTime.now())) return true;
+    return false;
+  }
+
   Future<void> _acceptProposal(Proposal proposal) async {
+    // Guard: abgelaufene Angebote können nicht mehr angenommen werden
+    if (_isProposalExpired(proposal)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dieses Angebot ist abgelaufen.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     try {
       final api = ref.read(apiServiceProvider);
       await api.acceptProposal(widget.orderId, proposal.id!);
@@ -108,11 +125,13 @@ class _ProposalsScreenState extends ConsumerState<ProposalsScreen> {
               }
 
               final proposal = proposals[index - 1];
+              final expired = _isProposalExpired(proposal);
               return SlideUpFadeIn(
                 delay: Duration(milliseconds: index * 100),
                 child: _ProposalCard(
                   proposal: proposal,
-                  isFirst: index == 1,
+                  isFirst: index == 1 && !expired,
+                  isExpired: expired,
                   onAccept: () => _acceptProposal(proposal),
                 ),
               );
@@ -164,11 +183,13 @@ class _ProposalsScreenState extends ConsumerState<ProposalsScreen> {
 class _ProposalCard extends StatelessWidget {
   final Proposal proposal;
   final bool isFirst;
+  final bool isExpired;
   final VoidCallback onAccept;
 
   const _ProposalCard({
     required this.proposal,
     required this.isFirst,
+    required this.isExpired,
     required this.onAccept,
   });
 
@@ -179,23 +200,47 @@ class _ProposalCard extends StatelessWidget {
 
     return TapScale(
       onTap: () {}, // Show detail sheet
-      child: Container(
+      child: Opacity(
+        opacity: isExpired ? 0.55 : 1.0,
+        child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppTheme.slate800,
           borderRadius: BorderRadius.circular(AppTheme.radiusLG),
           border: Border.all(
-            color: isFirst ? AppTheme.amber.withOpacity(0.4) : AppTheme.slate700,
-            width: isFirst ? 2 : 1,
+            color: isExpired
+                ? AppTheme.slate600
+                : isFirst
+                    ? AppTheme.amber.withOpacity(0.4)
+                    : AppTheme.slate700,
+            width: isFirst && !isExpired ? 2 : 1,
           ),
-          boxShadow: isFirst ? AppTheme.glowAmber : null,
+          boxShadow: isFirst && !isExpired ? AppTheme.glowAmber : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Badge for top proposal
-            if (isFirst)
+            // Badge: "Abgelaufen" or "Bestes Angebot"
+            if (isExpired)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  '⏰ Abgelaufen',
+                  style: TextStyle(
+                    fontFamily: AppTheme.bodyFont,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.error,
+                  ),
+                ),
+              )
+            else if (isFirst)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -366,22 +411,30 @@ class _ProposalCard extends StatelessWidget {
 
             // Accept button
             TapScale(
-              onTap: onAccept,
+              onTap: isExpired ? null : onAccept,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  color: isFirst ? AppTheme.amber : AppTheme.slate700,
+                  color: isExpired
+                      ? AppTheme.slate700
+                      : isFirst
+                          ? AppTheme.amber
+                          : AppTheme.slate700,
                   borderRadius: BorderRadius.circular(AppTheme.radiusMD),
                 ),
                 child: Center(
                   child: Text(
-                    'Annehmen',
+                    isExpired ? 'Abgelaufen' : 'Annehmen',
                     style: TextStyle(
                       fontFamily: AppTheme.displayFont,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: isFirst ? AppTheme.slate900 : AppTheme.slate100,
+                      color: isExpired
+                          ? AppTheme.slate500
+                          : isFirst
+                              ? AppTheme.slate900
+                              : AppTheme.slate100,
                     ),
                   ),
                 ),
@@ -389,6 +442,7 @@ class _ProposalCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -34,8 +34,7 @@ class OrderRepository {
   /// Creates a new order.
   ///
   /// Sends the exact DTO expected by POST /api/v1/orders:
-  ///   { serviceCategoryId, requestType, descriptionText, lat, lng,
-  ///     addressEncrypted, scheduledAt }
+  ///   { serviceCategoryId, requestType, description, location, scheduledAt }
   ///
   /// [mediaPaths] are optional local file paths that are uploaded as
   /// multipart media parts alongside the order JSON.
@@ -44,9 +43,14 @@ class OrderRepository {
     List<String>? mediaPaths,
   }) async {
     // Validate before sending
-    if (request.lat.isNaN || request.lng.isNaN) {
+    if (request.location.latitude.isNaN || request.location.longitude.isNaN) {
       throw const ValidationException(
         errors: {'location': 'Ungültige GPS-Koordinaten.'},
+      );
+    }
+    if (request.location.street.isEmpty || request.location.postalCode.isEmpty) {
+      throw const ValidationException(
+        errors: {'location': 'Adresse unvollständig – Straße und PLZ erforderlich.'},
       );
     }
     if (request.requestType == RequestType.scheduled &&
@@ -57,7 +61,24 @@ class OrderRepository {
     }
 
     try {
-      final response = await _api.createOrder(request.toJson(), mediaPaths: mediaPaths);
+      // Build the payload using the exact flat schema the backend expects:
+      //   { serviceCategoryId, requestType, description,
+      //     lat, lng, address, postleitzahl, scheduledAt }
+      // The OpenAPI spec uses a nested `location` object, but the live backend
+      // reads only these top-level fields — do NOT send `location`.
+      final loc = request.location;
+      final orderJson = <String, dynamic>{
+        'serviceCategoryId': request.serviceCategoryId,
+        'requestType':       request.requestType.name.toUpperCase(),
+        'description':       request.description,
+        'lat':               loc.latitude,
+        'lng':               loc.longitude,
+        'address':           '${loc.street}, ${loc.postalCode} ${loc.city}'.trim(),
+        'postleitzahl':      loc.postalCode,
+        'scheduledAt':       request.scheduledAt,
+      };
+
+      final response = await _api.createOrder(orderJson, mediaPaths: mediaPaths);
       return Order.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _mapDioException(e);

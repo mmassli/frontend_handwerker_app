@@ -102,6 +102,9 @@ class CustomerProfile {
   final String? lastName;
   final String? email;
   final Address? address;
+  /// Free-text home address saved by the user on the Profile screen.
+  /// Used to pre-fill the address field in the order creation flow.
+  final String? addressText;
   final bool? profileComplete;
   final DateTime? gdprConsentAt;
   final DateTime? createdAt;
@@ -113,6 +116,7 @@ class CustomerProfile {
     this.lastName,
     this.email,
     this.address,
+    this.addressText,
     this.profileComplete,
     this.gdprConsentAt,
     this.createdAt,
@@ -595,11 +599,39 @@ class OrderMedia {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ADDRESS INPUT DTO
+// Matches AddressInput in the backend OpenAPI spec
+// ═══════════════════════════════════════════════════════════════
+
+@JsonSerializable()
+class AddressInput {
+  final String street;
+  final String city;
+  final String postalCode;
+  final String country;
+  final double latitude;
+  final double longitude;
+
+  const AddressInput({
+    required this.street,
+    required this.city,
+    required this.postalCode,
+    this.country = 'DE',
+    required this.latitude,
+    required this.longitude,
+  });
+
+  factory AddressInput.fromJson(Map<String, dynamic> json) =>
+      _$AddressInputFromJson(json);
+  Map<String, dynamic> toJson() => _$AddressInputToJson(this);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CREATE ORDER REQUEST DTO
 // Matches the exact backend DTO shape for POST /api/v1/orders
 // ═══════════════════════════════════════════════════════════════
 
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class CreateOrderRequest {
   /// UUID of the service category returned by GET /api/v1/service-categories
   final String serviceCategoryId;
@@ -608,19 +640,10 @@ class CreateOrderRequest {
   final RequestType requestType;
 
   /// Optional description of the problem
-  final String? descriptionText;
+  final String? description;
 
-  /// GPS latitude of the service location
-  final double lat;
-
-  /// GPS longitude of the service location
-  final double lng;
-
-  /// AES-256-CBC encrypted address string
-  final String addressEncrypted;
-
-  /// Postal code (5-digit German PLZ) extracted from the address input
-  final String? postleitzahl;
+  /// Structured address + GPS location
+  final AddressInput location;
 
   /// ISO-8601 UTC string for scheduled orders; null for IMMEDIATE
   final String? scheduledAt;
@@ -628,11 +651,8 @@ class CreateOrderRequest {
   const CreateOrderRequest({
     required this.serviceCategoryId,
     required this.requestType,
-    this.descriptionText,
-    required this.lat,
-    required this.lng,
-    required this.addressEncrypted,
-    this.postleitzahl,
+    this.description,
+    required this.location,
     this.scheduledAt,
   });
 
@@ -700,6 +720,10 @@ class OrderMediaItem {
 
 /// Full order view returned from the craftsman-specific endpoints.
 /// Contains enriched category info, PLZ, and pre-signed media URLs.
+///
+/// [myProposal] is populated by `GET /craftsmen/me/available-orders`:
+/// - `null`   → craftsman has not yet submitted a proposal for this order
+/// - non-null → craftsman already submitted; contains status, price, etc.
 class CraftsmanOrderView {
   final String? id;
   final String? orderNumber;
@@ -716,6 +740,10 @@ class CraftsmanOrderView {
   final DateTime? createdAt;
   final DateTime? scheduledAt;
 
+  /// The craftsman's own proposal for this order, or null if not yet submitted.
+  /// Returned directly by the backend – no extra API round-trip needed.
+  final Proposal? myProposal;
+
   const CraftsmanOrderView({
     this.id,
     this.orderNumber,
@@ -731,6 +759,7 @@ class CraftsmanOrderView {
     this.media = const [],
     this.createdAt,
     this.scheduledAt,
+    this.myProposal,
   });
 
   factory CraftsmanOrderView.fromJson(Map<String, dynamic> json) {
@@ -783,6 +812,9 @@ class CraftsmanOrderView {
       scheduledAt: json['scheduledAt'] == null
           ? null
           : DateTime.tryParse(json['scheduledAt'] as String),
+      myProposal: json['myProposal'] == null
+          ? null
+          : Proposal.fromJson(json['myProposal'] as Map<String, dynamic>),
     );
   }
 

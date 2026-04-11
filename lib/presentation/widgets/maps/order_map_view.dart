@@ -4,7 +4,7 @@ import 'package:handwerker_app/core/theme/app_theme.dart';
 import 'package:handwerker_app/core/animations/micro_animations.dart';
 
 /// Placeholder map widget for order tracking
-/// Replace with google_maps_flutter.GoogleMap once API key is configured.
+/// Replace with flutter_map FlutterMap + Geoapify tiles for live tracking.
 ///
 /// Integration points:
 /// - Craftsman live GPS: WebSocket or polling /craftsmen/me/location
@@ -66,7 +66,7 @@ class _OrderMapViewState extends State<OrderMapView>
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          // Grid background (replace with GoogleMap widget)
+          // Grid background (replace with FlutterMap + Geoapify tiles)
           Positioned.fill(
             child: CustomPaint(painter: _MapGridPainter()),
           ),

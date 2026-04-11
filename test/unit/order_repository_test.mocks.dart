@@ -195,6 +195,38 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
       ) as _i4.Future<void>);
 
   @override
+  _i4.Future<_i2.Response<dynamic>> getCraftsmanMe() => (super.noSuchMethod(
+        Invocation.method(
+          #getCraftsmanMe,
+          [],
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #getCraftsmanMe,
+            [],
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> getCraftsmanOrders() => (super.noSuchMethod(
+        Invocation.method(
+          #getCraftsmanOrders,
+          [],
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #getCraftsmanOrders,
+            [],
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
   _i4.Future<_i2.Response<dynamic>> getCraftsmanProfile(String? id) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -262,6 +294,54 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
       ) as _i4.Future<_i2.Response<dynamic>>);
 
   @override
+  _i4.Future<_i2.Response<dynamic>> uploadDocument(
+    String? craftsmanId, {
+    required String? type,
+    required String? filePath,
+    String? expiryDate,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #uploadDocument,
+          [craftsmanId],
+          {
+            #type: type,
+            #filePath: filePath,
+            #expiryDate: expiryDate,
+          },
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #uploadDocument,
+            [craftsmanId],
+            {
+              #type: type,
+              #filePath: filePath,
+              #expiryDate: expiryDate,
+            },
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
+  _i4.Future<_i2.Response<dynamic>> getAvailableOrders() => (super.noSuchMethod(
+        Invocation.method(
+          #getAvailableOrders,
+          [],
+        ),
+        returnValue:
+            _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
+          this,
+          Invocation.method(
+            #getAvailableOrders,
+            [],
+          ),
+        )),
+      ) as _i4.Future<_i2.Response<dynamic>>);
+
+  @override
   _i4.Future<_i2.Response<dynamic>> getServiceCategories() =>
       (super.noSuchMethod(
         Invocation.method(
@@ -279,18 +359,23 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
       ) as _i4.Future<_i2.Response<dynamic>>);
 
   @override
-  _i4.Future<_i2.Response<dynamic>> createOrder(Map<String, dynamic>? data) =>
+  _i4.Future<_i2.Response<dynamic>> createOrder(
+    Map<String, dynamic>? orderData, {
+    List<String>? mediaPaths,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #createOrder,
-          [data],
+          [orderData],
+          {#mediaPaths: mediaPaths},
         ),
         returnValue:
             _i4.Future<_i2.Response<dynamic>>.value(_FakeResponse_1<dynamic>(
           this,
           Invocation.method(
             #createOrder,
-            [data],
+            [orderData],
+            {#mediaPaths: mediaPaths},
           ),
         )),
       ) as _i4.Future<_i2.Response<dynamic>>);

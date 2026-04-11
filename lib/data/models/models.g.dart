@@ -90,6 +90,7 @@ CustomerProfile _$CustomerProfileFromJson(Map<String, dynamic> json) =>
       address: json['address'] == null
           ? null
           : Address.fromJson(json['address'] as Map<String, dynamic>),
+      addressText: json['addressText'] as String?,
       profileComplete: json['profileComplete'] as bool?,
       gdprConsentAt: json['gdprConsentAt'] == null
           ? null
@@ -107,6 +108,7 @@ Map<String, dynamic> _$CustomerProfileToJson(CustomerProfile instance) =>
       'lastName': instance.lastName,
       'email': instance.email,
       'address': instance.address,
+      'addressText': instance.addressText,
       'profileComplete': instance.profileComplete,
       'gdprConsentAt': instance.gdprConsentAt?.toIso8601String(),
       'createdAt': instance.createdAt?.toIso8601String(),
@@ -384,15 +386,31 @@ Map<String, dynamic> _$OrderMediaToJson(OrderMedia instance) =>
       'uploadedAt': instance.uploadedAt?.toIso8601String(),
     };
 
+AddressInput _$AddressInputFromJson(Map<String, dynamic> json) => AddressInput(
+      street: json['street'] as String,
+      city: json['city'] as String,
+      postalCode: json['postalCode'] as String,
+      country: json['country'] as String? ?? 'DE',
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+    );
+
+Map<String, dynamic> _$AddressInputToJson(AddressInput instance) =>
+    <String, dynamic>{
+      'street': instance.street,
+      'city': instance.city,
+      'postalCode': instance.postalCode,
+      'country': instance.country,
+      'latitude': instance.latitude,
+      'longitude': instance.longitude,
+    };
+
 CreateOrderRequest _$CreateOrderRequestFromJson(Map<String, dynamic> json) =>
     CreateOrderRequest(
       serviceCategoryId: json['serviceCategoryId'] as String,
       requestType: $enumDecode(_$RequestTypeEnumMap, json['requestType']),
-      descriptionText: json['descriptionText'] as String?,
-      lat: (json['lat'] as num).toDouble(),
-      lng: (json['lng'] as num).toDouble(),
-      addressEncrypted: json['addressEncrypted'] as String,
-      postleitzahl: json['postleitzahl'] as String?,
+      description: json['description'] as String?,
+      location: AddressInput.fromJson(json['location'] as Map<String, dynamic>),
       scheduledAt: json['scheduledAt'] as String?,
     );
 
@@ -400,12 +418,9 @@ Map<String, dynamic> _$CreateOrderRequestToJson(CreateOrderRequest instance) =>
     <String, dynamic>{
       'serviceCategoryId': instance.serviceCategoryId,
       'requestType': _$RequestTypeEnumMap[instance.requestType]!,
-      if (instance.descriptionText case final value?) 'descriptionText': value,
-      'lat': instance.lat,
-      'lng': instance.lng,
-      'addressEncrypted': instance.addressEncrypted,
-      if (instance.postleitzahl case final value?) 'postleitzahl': value,
-      if (instance.scheduledAt case final value?) 'scheduledAt': value,
+      'description': instance.description,
+      'location': instance.location.toJson(),
+      'scheduledAt': instance.scheduledAt,
     };
 
 Proposal _$ProposalFromJson(Map<String, dynamic> json) => Proposal(
