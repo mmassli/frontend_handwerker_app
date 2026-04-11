@@ -42,12 +42,25 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
   final _commentController = TextEditingController();
   bool _isSubmitting = false;
 
+  /// Whether the ETA field has already been pre-filled from the distance API.
+  /// Prevents overwriting a value the user may have typed manually.
+  bool _etaPreFilled = false;
+
   @override
   void dispose() {
     _priceController.dispose();
     _etaController.dispose();
     _commentController.dispose();
     super.dispose();
+  }
+
+  /// Called once when the distance data arrives to pre-fill the ETA field.
+  void _tryPreFillEta(int? etaMinutes) {
+    if (_etaPreFilled) return;
+    if (etaMinutes == null || etaMinutes <= 0) return;
+    if (_etaController.text.isNotEmpty) return; // user already typed something
+    _etaController.text = etaMinutes.toString();
+    _etaPreFilled = true;
   }
 
   Future<void> _submit() async {
@@ -119,6 +132,18 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
     final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
     final myProposalAsync = ref.watch(myProposalForOrderProvider(widget.orderId));
 
+    // ref.listen fires the callback AFTER the build frame, making it safe
+    // to mutate _etaController without causing a synchronous dirty-rebuild.
+    // This replaces the previous `distanceAsync.whenData(...)` call that was
+    // incorrectly executing side-effects inside build().
+    ref.listen<AsyncValue<OrderDistance>>(
+      orderDistanceProvider(widget.orderId),
+      (_, next) => next.whenData((d) => _tryPreFillEta(d.etaMinutes)),
+    );
+
+    // Still watch so the chip re-renders once data arrives.
+    final distanceAsync = ref.watch(orderDistanceProvider(widget.orderId));
+
     return Scaffold(
       backgroundColor: AppTheme.slate900,
       appBar: AppBar(
@@ -133,9 +158,9 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
         data: (order) => myProposalAsync.when(
           data: (myProposal) => myProposal != null
               ? _SubmittedProposalView(order: order, proposal: myProposal, openMedia: _openMedia)
-              : _buildForm(order),
+              : _buildForm(order, distanceAsync.asData?.value),
           loading: () => const Center(child: CircularProgressIndicator(color: AppTheme.amber)),
-          error: (_, __) => _buildForm(order),
+          error: (_, __) => _buildForm(order, distanceAsync.asData?.value),
         ),
         loading: () =>
             const Center(child: CircularProgressIndicator(color: AppTheme.amber)),
@@ -146,7 +171,7 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
     );
   }
 
-  Widget _buildForm(Order order) {
+  Widget _buildForm(Order order, OrderDistance? distance) {
     return SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -215,6 +240,13 @@ class _JobRequestScreenState extends ConsumerState<JobRequestScreen> {
                             ),
                         ],
                       ),
+
+                      // ── Distance / ETA chip ───────────────────
+                      if (distance != null) ...[
+                        const SizedBox(height: 10),
+                        _DistanceChip(distance: distance),
+                      ],
+
                       const SizedBox(height: 16),
 
                       // ── Category name ─────────────────────
@@ -918,6 +950,80 @@ class _SubmittedProposalView extends StatelessWidget {
     final hour = local.hour.toString().padLeft(2, '0');
     final min = local.minute.toString().padLeft(2, '0');
     return '$day.$month.$year $hour:$min Uhr';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Distance / travel-time chip
+// ─────────────────────────────────────────────────────────────
+class _DistanceChip extends StatelessWidget {
+  final OrderDistance distance;
+  const _DistanceChip({required this.distance});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Distance
+        if (distance.distanceKm != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppTheme.info.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.route_rounded,
+                    size: 12, color: AppTheme.info),
+                const SizedBox(width: 4),
+                Text(
+                  distance.distanceFormatted,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.bodyFont,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.info,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        // ETA
+        if (distance.etaMinutes != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppTheme.amber.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(6),
+              border:
+                  Border.all(color: AppTheme.amber.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.schedule_rounded,
+                    size: 12, color: AppTheme.amber),
+                const SizedBox(width: 4),
+                Text(
+                  '~${distance.etaMinutes} min',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.bodyFont,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.amber,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 

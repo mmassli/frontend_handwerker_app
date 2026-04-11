@@ -57,6 +57,7 @@ class ApiConstants {
   static String orderCustomerConfirm(String id) =>
       '/orders/$id/customer-confirm';
   static String orderCancel(String id) => '/orders/$id/cancel';
+  static String orderDistance(String id) => '/orders/$id/distance';
 
   // ── Proposals ─────────────────────────────────────────────
   static String orderProposals(String orderId) => '/orders/$orderId/proposals';

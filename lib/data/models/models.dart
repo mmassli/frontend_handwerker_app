@@ -344,6 +344,97 @@ class CraftsmanDocument {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ORDER DISTANCE
+// Returned by GET /orders/{id}/distance
+// ═══════════════════════════════════════════════════════════════
+
+class OrderDistance {
+  /// Straight-line or driving distance in kilometres.
+  final double? distanceKm;
+
+  /// Estimated travel time in minutes (used to pre-fill the ETA field).
+  final int? etaMinutes;
+
+  const OrderDistance({this.distanceKm, this.etaMinutes});
+
+  factory OrderDistance.fromJson(Map<String, dynamic> json) {
+    // ── Distance ──────────────────────────────────────────────────────────
+    // Try every common field name a backend might use.
+    // Priority: explicit km fields → explicit meter fields → generic 'distance'
+    double? distKm;
+
+    final rawKm = json['distanceKm'] ?? json['distance_km'];
+    if (rawKm != null) {
+      final v = (rawKm as num).toDouble();
+      // 0.0 means the backend couldn't compute a route – treat as missing
+      distKm = v > 0 ? v : null;
+    } else {
+      final rawM = json['distanceMeters'] ??
+          json['distance_meters'] ??
+          json['distanceM'] ??
+          json['distance_m'];
+      if (rawM != null) {
+        final v = (rawM as num).toDouble();
+        distKm = v > 0 ? v / 1000.0 : null;
+      } else {
+        // Fallback: 'distance' – could be km (float like 4.2) or meters (int like 4200)
+        final rawGeneric = json['distance'];
+        if (rawGeneric != null) {
+          final v = (rawGeneric as num).toDouble();
+          if (v > 0) {
+            // Heuristic: values > 500 are almost certainly meters, not km
+            distKm = v > 500 ? v / 1000.0 : v;
+          }
+        }
+      }
+    }
+
+    // ── ETA ───────────────────────────────────────────────────────────────
+    int? etaMin;
+
+    final rawMin = json['etaMinutes'] ??
+        json['eta_minutes'] ??
+        json['travelTimeMin'] ??       // ← backend sends this
+        json['travel_time_min'] ??
+        json['estimatedTravelTimeMinutes'] ??
+        json['estimated_travel_time_minutes'] ??
+        json['travelTimeMinutes'] ??
+        json['travel_time_minutes'] ??
+        json['durationMinutes'] ??
+        json['duration_minutes'];
+    if (rawMin != null) {
+      etaMin = (rawMin as num).toInt();
+    } else {
+      // Fallback: seconds-based fields → convert to minutes
+      final rawSec = json['etaSeconds'] ??
+          json['eta_seconds'] ??
+          json['durationSeconds'] ??
+          json['duration_seconds'] ??
+          json['travelTimeSeconds'] ??
+          json['travel_time_seconds'];
+      if (rawSec != null) {
+        etaMin = ((rawSec as num).toDouble() / 60).round();
+      }
+    }
+
+    return OrderDistance(distanceKm: distKm, etaMinutes: etaMin);
+  }
+
+  /// Human-readable distance string, e.g. "3.4 km" or "850 m".
+  String get distanceFormatted {
+    if (distanceKm == null) return '–';
+    if (distanceKm! < 1) {
+      return '${(distanceKm! * 1000).round()} m';
+    }
+    return '${distanceKm!.toStringAsFixed(1)} km';
+  }
+
+  @override
+  String toString() =>
+      'OrderDistance(distanceKm: $distanceKm, etaMinutes: $etaMinutes)';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SERVICE CATEGORIES
 // ═══════════════════════════════════════════════════════════════
 

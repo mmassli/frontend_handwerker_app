@@ -657,6 +657,31 @@ final availableOrdersProvider =
       .toList();
 });
 
+/// Fetches the distance + estimated travel time from the craftsman's current
+/// location to the order address.
+/// Endpoint: GET /orders/{id}/distance
+///
+/// This provider is *autoDispose + family* so it is only alive while the
+/// JobRequestScreen is on-screen (i.e. not fetched on every build, only when
+/// the screen actually watches it).
+final orderDistanceProvider =
+    FutureProvider.autoDispose.family<OrderDistance, String>((ref, orderId) async {
+  final api = ref.watch(apiServiceProvider);
+  final response = await api.getOrderDistance(orderId);
+  final data = response.data;
+  // ignore: avoid_print
+  print('📏 [DISTANCE] raw response type=${data.runtimeType} data=$data');
+  if (data is Map<String, dynamic>) {
+    final result = OrderDistance.fromJson(data);
+    // ignore: avoid_print
+    print('📏 [DISTANCE] parsed → $result');
+    return result;
+  }
+  // ignore: avoid_print
+  print('📏 [DISTANCE] ⚠️ unexpected response shape – returning empty');
+  return const OrderDistance();
+});
+
 final craftsmanWalletProvider =
     FutureProvider<WalletBalance>((ref) async {
   // Watch auth state so this provider re-fetches on login/logout/account switch.

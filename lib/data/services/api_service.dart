@@ -213,6 +213,12 @@ class ApiService {
   Future<Response> cancelOrder(String orderId, String reason) =>
       _dio.post(ApiConstants.orderCancel(orderId), data: {'reason': reason});
 
+  /// GET /orders/{id}/distance
+  /// Returns the distance and estimated travel time from the craftsman's
+  /// current location to the order location.
+  Future<Response> getOrderDistance(String orderId) =>
+      _dio.get(ApiConstants.orderDistance(orderId));
+
   // ── Proposals ─────────────────────────────────────────────
   Future<Response> listProposals(String orderId) =>
       _dio.get(ApiConstants.orderProposals(orderId));
@@ -416,9 +422,14 @@ class _LoggingInterceptor extends Interceptor {
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    // In debug: log status code
+    // In debug: log status code + body (truncated to 500 chars)
     // ignore: avoid_print
     print('✅ [RESPONSE] ${response.statusCode} ${response.requestOptions.path}');
+    try {
+      final body = response.data?.toString() ?? '';
+      // ignore: avoid_print
+      print('   Body: ${body.length > 500 ? '${body.substring(0, 500)}…' : body}');
+    } catch (_) {}
     handler.next(response);
   }
 
